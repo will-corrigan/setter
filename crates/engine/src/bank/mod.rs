@@ -391,6 +391,59 @@ mod tests {
     }
 
     #[test]
+    fn labels_and_reads_as_never_show_filtered_words() {
+        // An offensive word that is also an anagram of GOAD, ranked first.
+        let lex = crate::Lexicon::bundled(&["dago".to_string()], &Default::default());
+        let abbr = crate::Abbreviations::bundled();
+        let v = build(
+            Ctx::new(&lex, &abbr),
+            &Indicators::bundled(),
+            thesaurus(),
+            "goad",
+        );
+        for d in &v {
+            for o in &d.options {
+                assert!(
+                    !o.label.to_lowercase().contains("dago"),
+                    "{}: {}",
+                    d.kind.name(),
+                    o.label
+                );
+                assert!(
+                    !o.reads_as.to_lowercase().contains("dago"),
+                    "{}: {}",
+                    d.kind.name(),
+                    o.reads_as
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn columns_list_each_word_once_and_titles_are_tidy() {
+        for answer in ["orchestra", "pitch", "chest", "band"] {
+            for d in build(ctx(), &Indicators::bundled(), thesaurus(), answer) {
+                for c in d.options.iter().flat_map(|o| &o.columns) {
+                    let mut seen = std::collections::HashSet::new();
+                    for item in c.groups.iter().flat_map(|(_, i)| i) {
+                        assert!(
+                            seen.insert(item.to_lowercase()),
+                            "{answer}/{}/{}: {item} twice",
+                            d.kind.name(),
+                            c.title
+                        );
+                    }
+                    assert!(
+                        !c.title.ends_with([',', ';', ':', '.']),
+                        "{answer}: title {:?}",
+                        c.title
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn blanks_and_tiny_answers_are_all_zero() {
         for a in ["orch?stra", "a", ""] {
             assert!(build(ctx(), &Indicators::bundled(), thesaurus(), a)

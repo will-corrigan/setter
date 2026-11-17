@@ -29,6 +29,7 @@ pub(super) fn build_one(
     };
     let mut options = options;
     options.truncate(MAX_OPTIONS);
+    options.retain(|o| allowed(ctx, &o.label) && allowed(ctx, &o.reads_as));
     for option in &mut options {
         for column in &mut option.columns {
             tidy(ctx, &mut column.groups);
@@ -47,10 +48,17 @@ type Built = (usize, Vec<DeviceOption>);
 /// broader terms are unordered): these are re-ranked so everyday words lead.
 const RANKED_GROUPS: &[&str] = &["Related", "Associated", "Broader"];
 
-/// Drop offensive and user-banned items everywhere; rank loose lists by popularity.
+/// May this word or phrase be shown? (Not offensive, not banned by the user.)
+fn allowed(ctx: Ctx, w: &str) -> bool {
+    !crate::text::is_offensive(w) && !ctx.lex.is_banned(w)
+}
+
+/// Drop disallowed items, list each word once per column (first group wins),
+/// and rank loose lists by popularity.
 fn tidy(ctx: Ctx, groups: &mut Vec<(String, Vec<String>)>) {
+    let mut seen = std::collections::HashSet::new();
     for (name, items) in groups.iter_mut() {
-        items.retain(|w| !crate::text::is_offensive(w) && !ctx.lex.is_banned(w));
+        items.retain(|w| allowed(ctx, w) && seen.insert(w.to_lowercase()));
         if RANKED_GROUPS.contains(&name.as_str()) {
             items.sort_by_key(|w| ctx.lex.lookup(&crate::text::key(w)).unwrap_or(u32::MAX));
         }
@@ -165,7 +173,10 @@ fn alternate_letters(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> B
     let found = wordplay::alternation::find(ctx, key);
     let mut options = vec![];
     for (odd, label) in [(true, "Odd letters"), (false, "Even letters")] {
-        let items: Vec<_> = found.iter().filter(|a| a.odd == odd).collect();
+        let items: Vec<_> = found
+            .iter()
+            .filter(|a| a.odd == odd && allowed(ctx, &a.source.text))
+            .collect();
         if items.is_empty() {
             continue;
         }
@@ -599,6 +610,16 @@ fn hidden(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     ];
     let options = sets
         .into_iter()
+        .map(|(label, items, reversed)| {
+            (
+                label,
+                items
+                    .into_iter()
+                    .filter(|(t, _)| allowed(ctx, t))
+                    .collect::<Vec<_>>(),
+                reversed,
+            )
+        })
         .filter(|(_, items, _)| !items.is_empty())
         .map(|(label, items, reversed)| {
             let col = Column {
@@ -779,7 +800,14 @@ fn double_definition(ctx: Ctx, th: &Thesaurus, key: &str) -> Built {
             let short: Vec<&str> = s.gloss.split_whitespace().take(5).collect();
             Column {
                 groups: vec![("Words".into(), s.words.clone())],
-                ..column(format!("{}: {}", s.pos, short.join(" ")), Tone::part(n))
+                ..column(
+                    format!(
+                        "{}: {}",
+                        s.pos,
+                        short.join(" ").trim_end_matches([',', ';', ':', '.'])
+                    ),
+                    Tone::part(n),
+                )
             }
         })
         .collect();
