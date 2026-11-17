@@ -21,11 +21,14 @@ const NEWSREADER_ITALIC: Asset = asset!("/assets/fonts/newsreader-latin-opsz-ita
 const INSTRUMENT_SANS: Asset = asset!("/assets/fonts/instrument-sans-latin-wght-normal.woff2");
 
 fn main() {
-    let cfg = Config::new().with_menu(None).with_window(
-        WindowBuilder::new()
-            .with_title("Setter")
-            .with_inner_size(LogicalSize::new(1440.0, 920.0)),
-    );
+    let cfg = Config::new()
+        .with_custom_head(files::theme_head(files::load_settings().theme))
+        .with_menu(None)
+        .with_window(
+            WindowBuilder::new()
+                .with_title("Setter")
+                .with_inner_size(LogicalSize::new(1440.0, 920.0)),
+        );
     if std::env::args().any(|a| a == "--gallery") {
         dioxus::LaunchBuilder::desktop()
             .with_cfg(cfg)

@@ -153,6 +153,16 @@ pub struct Settings {
     pub last_file: Option<PathBuf>,
 }
 
+/// A `<head>` script applying a saved Light/Dark theme before the first paint
+/// (System needs nothing: the CSS follows the OS).
+pub fn theme_head(theme: Theme) -> String {
+    match theme {
+        Theme::System => String::new(),
+        Theme::Light => "<script>document.documentElement.dataset.theme='light'</script>".into(),
+        Theme::Dark => "<script>document.documentElement.dataset.theme='dark'</script>".into(),
+    }
+}
+
 pub fn load_settings() -> Settings {
     load_settings_from(&config_dir())
 }
@@ -242,6 +252,13 @@ mod tests {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn saved_theme_is_set_before_first_paint() {
+        assert_eq!(theme_head(Theme::System), "");
+        assert!(theme_head(Theme::Dark).contains("dataset.theme='dark'"));
+        assert!(theme_head(Theme::Light).contains("dataset.theme='light'"));
     }
 
     #[test]
