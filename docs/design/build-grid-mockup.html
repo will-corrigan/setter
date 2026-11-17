@@ -137,16 +137,16 @@ function sugList(l,cls=''){let s=suggestions(l).filter(x=>x.ok);if(popFilter)s=s
 function render(){const app=document.getElementById('app');app.classList.toggle('dark',dark);const l=curLight();
  const label=l?`${l.num} ${l.dir==='a'?'across':'down'}`:'';
  let right='';
- if(variant==='B'&&l) right=`<div class=right><h4>Fits ${label} · ${pattern(l).toUpperCase().replace(/\?/g,'·')}</h4><input class=filter id=pf placeholder="Type to narrow" value="${popFilter}">${chips()}<div class=list>${sugList(l)}</div><div class=hint>Click to place · Ctrl+Space jumps here</div></div>`;
+ if(variant==='B'&&l) right=`<div class=right><h4>Fits ${label} · ${pattern(l).toUpperCase().replace(/\?/g,'·')}</h4><input class=filter id=pf placeholder="Type to narrow" value="${popFilter}">${chips()}<div class=list>${sugList(l)}</div></div>`;
  if(variant==='C'){const items=L.out.map(x=>{const on=x===l;const p=pattern(x);return `<div class="row ${on?'on':''} ${p.includes('?')?'':'full'}" data-l="${L.out.indexOf(x)}"><b>${x.num}${x.dir}</b><span class=pat>${p.toUpperCase().replace(/\?/g,'·')}</span><small class=muted>${p.length}</small>${on&&p.includes('?')?`<div class=inline><div class=list style="max-height:180px">${sugList(x)}</div></div>`:''}</div>`}).join('');
   right=`<div class="right answers"><h4>Answers</h4><div class=list style="max-height:600px">${items}</div></div>`}
  app.innerHTML=`<div class=top><span class=logo>Setter</span><span class=seg><span class=on>Build grid</span><span>Write clues</span></span>
   <button class=btn id=np>New puzzle</button><span class=sp></span><span class=muted>${L.out.filter(x=>!pattern(x).includes('?')).length} of ${L.out.length} filled</span>
   <button class="btn primary" id=af>Fill the rest</button><button class="btn ghost" id=clr>Clear</button><button class="btn ghost" id=th>${dark?'Light':'Dark'}</button></div>
   <div class="body ${right?'':'wide'}"><div class=left>
-  <div class=cluebar>${l?`<b>${label}</b><span class=pat>${shown(l)}</span><label class=enum title="How the answer splits into words, e.g. 4,5 or 3-4">(<input id=en value="${wantedEnum(l)}" size=6>)</label><span class=hint>Ctrl+Space to search the words</span>`:''}</div>
+  <div class=cluebar>${l?`<b>${label}</b><span class=pat>${shown(l)}</span><label class=enum title="How the answer splits into words, e.g. 4,5 or 3-4">(<input id=en value="${wantedEnum(l)}" size=6>)</label>`:''}</div>
   ${gridHTML()}<div class=status>${status()}</div></div>${right}</div>
-  ${pop&&l?`<div class=pop id=pop style="left:${pop.x}px;top:${pop.y}px"><input class=filter id=pf placeholder="Type to narrow ${pattern(l).toUpperCase().replace(/\?/g,'·')}" value="${popFilter}">${chips()}<div class=list>${sugList(l,'pop')}</div><div class=hint>↑↓ choose · Enter place · Esc close</div></div>`:''}
+  ${pop&&l?`<div class=pop id=pop style="left:${pop.x}px;top:${pop.y}px"><input class=filter id=pf placeholder="Type to narrow ${pattern(l).toUpperCase().replace(/\?/g,'·')}" value="${popFilter}">${chips()}<div class=list>${sugList(l,'pop')}</div></div>`:''}
   ${ctx?`<div class=ctx style="left:${ctx.x}px;top:${ctx.y}px"><div data-a=clear>Clear this answer</div><div data-a=fill>Fill just this answer</div></div>`:''}
   ${picker?`<div class=overlay><div class=picker><h3>Pick a grid</h3><div class=thumbs>${Object.entries(TEMPLATES).map(([k,rs])=>`<div class=thumb data-t="${k}"><div class=mini style="grid-template-columns:repeat(${rs.length},8px)">${rs.join('').split('').map(c=>`<i class="${c==='#'?'b':''}"></i>`).join('')}</div><span>${k}</span></div>`).join('')}</div></div></div>`:''}`;
  const pf=document.getElementById('pf');if(pf&&(pop||document.activeElement?.id==='pf'||focusFilter)){pf.focus();pf.setSelectionRange(pf.value.length,pf.value.length);focusFilter=false}

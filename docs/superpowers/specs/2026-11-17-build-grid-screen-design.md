@@ -31,13 +31,15 @@ and get words that fit the letters already in place on demand.
 - Unexplained numbers, jargon or notes under suggestions in the UI (the user
   rejected "26 left", then the plain-English notes too).
 - Inverted crossword colours in dark mode.
+- Instruction text on screen ("Click to place", "Ctrl+Space jumps here" and the
+  like). Shortcuts go in button tooltips only. (User, 2026-11-17.)
 
 ## Layout (approved through the mockup)
 
 ```
 ┌ Setter │ [Build grid | Write clues] │ New puzzle │      n of m filled │ Fill the rest │ Undo │ …┐
 ├───────────────────────────────────────────────┬───────────────────────────────────┤
-│ 3 down  ·A·· ·E·T·  (4,5)  Ctrl+Space…         │ Fits 3 down · ·A·· ·E·T·          │
+│ 3 down  ·A·· ·E·T·  (4,5)                      │ Fits 3 down · ·A·· ·E·T·          │
 │ ┌───────── grid ─────────┐                     │ [ search ]  [Any|1|2|3+ words]    │
 │ │ white squares, black   │                     │ cart horse (4,5)                  │
 │ │ blocks, thick bars at  │                     │ dark horse (4,5)                  │
