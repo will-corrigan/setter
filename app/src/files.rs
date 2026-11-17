@@ -62,7 +62,13 @@ fn read_lines(path: &Path) -> Vec<String> {
 }
 
 /// The user's config folder: `$SETTER_CONFIG_DIR`, else `<OS config dir>/setter`.
+/// Tests get a scratch folder of their own, so they never touch the user's.
 pub fn config_dir() -> PathBuf {
+    if cfg!(test) {
+        let d = std::env::temp_dir().join(format!("setter-tests-{}", std::process::id()));
+        let _ = fs::create_dir_all(&d);
+        return d;
+    }
     let d = std::env::var_os("SETTER_CONFIG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
@@ -382,6 +388,14 @@ mod tests {
         let names: Vec<_> = fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name()).collect();
         assert_eq!(names, vec![std::ffi::OsString::from("p.xword")]);
         let _ = fs::remove_dir_all(&d);
+    }
+
+
+    #[test]
+    fn tests_never_use_the_user_s_config_folder() {
+        let d = config_dir();
+        assert!(d.starts_with(std::env::temp_dir()), "{}", d.display());
+        assert!(!d.ends_with("setter"));
     }
 
 }
