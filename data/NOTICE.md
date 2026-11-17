@@ -102,6 +102,12 @@ Button and ToggleGroup are adapted from the official Dioxus components
 (https://github.com/DioxusLabs/components) by DioxusLabs, dual-licensed under
 the MIT License and the Apache License 2.0, and restyled for Setter.
 
+## Web page player: data/vendor/exolve
+
+Exported web pages embed Exolve (https://github.com/viresh-ratnakar/exolve),
+MIT License, Copyright (c) 2019 Viresh Ratnakar. The full licence is in
+data/vendor/exolve/LICENSE.
+
 ## Setter's own lists
 
 abbreviations.toml, indicators.toml and offensive.txt were written for this
