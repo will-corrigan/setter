@@ -154,21 +154,40 @@ impl Thesaurus {
         }
     }
 
-    fn is_listed(&self, key: &str) -> bool {
-        self.senses.contains_key(key) || self.moby.contains_key(key)
+    /// Has the thesaurus anything to offer for this exact word: another word
+    /// in one of its senses, a broader term, or a Moby entry?
+    fn offers(&self, key: &str) -> bool {
+        self.moby.contains_key(key)
+            || self.sense_ids(key).iter().any(|&i| {
+                let s = &self.synsets[i as usize];
+                !s.rel[HYPER].is_empty() || s.members.iter().any(|m| m.to_lowercase() != key)
+            })
     }
 
     /// The word to look up for `word` (lower case), and the base word if it
-    /// had to drop an ending: "trees" → "tree", "carried" → "carry".
+    /// had to drop an ending or was irregular: "trees" → "tree", "carried" →
+    /// "carry", "knew" → "know". A word whose own entry offers nothing falls
+    /// back the same way ("directed" → "direct").
     fn lookup(&self, word: &str) -> (String, Option<String>) {
         let key = word.trim().to_lowercase();
-        if self.is_listed(&key) {
+        if self.offers(&key) {
             return (key, None);
         }
-        match base_forms(&key).into_iter().find(|b| self.is_listed(b)) {
+        let irregular = IRREGULAR.get(key.as_str()).map(|b| b.to_string());
+        match irregular
+            .into_iter()
+            .chain(base_forms(&key))
+            .find(|b| self.offers(b))
+        {
             Some(base) => (base.clone(), Some(base)),
             None => (key, None),
         }
+    }
+
+    /// Is there anything to define this word with, by itself or by its base?
+    pub fn knows(&self, word: &str) -> bool {
+        let (key, _) = self.lookup(word);
+        self.offers(&key)
     }
 
     fn sense_ids(&self, key: &str) -> &[u32] {
@@ -249,6 +268,16 @@ impl Thesaurus {
         g.out
     }
 }
+
+/// Irregular forms and their base words (data/irregular.tsv).
+static IRREGULAR: std::sync::LazyLock<HashMap<&'static str, &'static str>> =
+    std::sync::LazyLock::new(|| {
+        include_str!("../../../data/irregular.tsv")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .collect()
+    });
 
 /// Possible base words for an inflected word, most likely first: plurals
 /// and -s verbs, then -ed, then -ing. Only regular endings.
@@ -347,6 +376,31 @@ mod tests {
     }
 
     #[test]
+    fn irregular_forms_use_their_base_word() {
+        for (word, base) in [("knew", "know"), ("feet", "foot"), ("began", "begin"), ("mice", "mouse")] {
+            let g = th().meanings(word, 80);
+            assert!(!g.is_empty(), "{word}: nothing");
+            assert!(g.iter().all(|(t, _)| t.ends_with(base)), "{word}: {:?}", g.iter().map(|(t, _)| t).collect::<Vec<_>>());
+        }
+    }
+
+    #[test]
+    fn an_entry_with_nothing_to_offer_falls_back_too() {
+        // WordNet lists "directed" only as an adjective with no other words.
+        let g = th().meanings("directed", 80);
+        assert!(!g.is_empty());
+        assert!(g.iter().all(|(t, _)| t.ends_with("direct")), "{:?}", g.iter().map(|(t, _)| t).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn knows_says_whether_anything_can_define_a_word() {
+        assert!(th().knows("trees"));
+        assert!(th().knows("knew"));
+        assert!(!th().knows("whoom"));
+        assert!(!th().knows("as to"));
+    }
+
+    #[test]
     fn words_with_their_own_entry_keep_it() {
         // "dodging" is a noun in its own right.
         let g = th().meanings("dodging", 80);
@@ -385,3 +439,4 @@ mod tests {
         assert!(th().linked("", 5).is_empty());
     }
 }
+
