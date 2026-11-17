@@ -233,9 +233,13 @@ Mockup: `docs/design/build-grid-mockup.html`.
   puzzle, Fill the rest, Undo/Redo with tooltips), `tokens.css` (grid tokens),
   `components.css`, `gallery.rs`.
 
-**Behaviour:** the grid block (answer bar, grid, status) is centred
-horizontally and vertically in the area left of the panel. Then the spec's
-Layout section and the mockup, using the Task 1–4
+**Behaviour:** three columns: grid block on the left (top-aligned), clue list
+in the middle, word panel on the right (about 290 px; token
+`--word-panel-width`). The clue list is a new ds component,
+`ds/answer_list.rs` (`AnswerList { items: Vec<AnswerRow>, current, on_select }`,
+where `AnswerRow { key, label, letters, clue: Option<String> }`). It shows a
+filled or hollow dot, the letters, and a clue preview or "No clue yet". It gets
+an SSR test and a gallery entry. Then the spec's Layout section and the mockup, using the Task 1–4
 interfaces:
 - `grid_status` for the status line,
 - `safe_suggestions` for the panel (limit 120, filtered by the search box

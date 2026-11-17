@@ -57,9 +57,13 @@ and get words that fit the letters already in place on demand.
 - **Answer bar** (above the grid): the label (e.g. "3 down"), the pattern with
   word breaks, and an editable split box "(4,5)" or "(3-4)". A split that
   doesn't add up to the answer's length is ignored.
-- **The grid is centred**, horizontally and vertically, in the area left of the
-  panel. The answer bar above it and the status line below it move with it.
-  (User, 2026-11-17.)
+- **Three columns** (user, 2026-11-17; this replaces "centred grid"):
+  - **left:** the answer bar, grid and status, top-aligned;
+  - **middle:** the **clue list**, Across then Down. Each row shows its number,
+    the answer's letters with word breaks, and a filled dot plus a one-line
+    preview of the clue, or a hollow dot and "No clue yet". Click a row to
+    select that answer.
+  - **right:** the word panel, slightly narrower (about 290 px).
 - **Grid:**
   - Click a square to select it and light up its answer. Click it again, or
     press Space, to switch between across and down.

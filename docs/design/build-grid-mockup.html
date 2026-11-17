@@ -18,10 +18,18 @@ body{margin:0;padding:14px;background:var(--background,#fff);color:var(--foregro
 .btn{font:inherit;border:1px solid var(--line-strong);background:var(--raised);color:var(--text);border-radius:8px;padding:5px 12px;cursor:pointer}
 .btn.primary{background:var(--invert);color:var(--invert-text);border-color:var(--invert)}
 .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
-.body{display:grid;grid-template-columns:1fr 360px;min-height:640px}
+.body{display:grid;grid-template-columns:auto 1fr 290px;min-height:640px}
+.clues{border-left:1px solid var(--line);padding:14px 12px;overflow:auto;max-height:700px}
+.clues h4{margin:10px 6px 4px;font-size:12px;color:var(--muted);font-weight:600}.clues h4:first-child{margin-top:0}
+.crow{display:grid;grid-template-columns:30px 1fr;gap:2px 6px;padding:5px 6px;border-radius:6px;cursor:pointer}
+.crow:hover{background:var(--canvas)}.crow.on{background:var(--p1-bg)}
+.crow b{font-size:12px}.crow .ans{font-weight:700;letter-spacing:.12em;font-size:12px}
+.crow .ct{grid-column:2;font-family:'Newsreader',serif;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow .none{grid-column:2;font-size:12px;color:var(--faint)}
+.crow .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--def)}
+.crow .dot.empty{background:transparent;border:1.5px solid var(--line-strong)}
 .body.wide{grid-template-columns:1fr}
-.left{padding:18px 22px;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;position:relative}
-.left>.cluebar,.left>.status{width:max-content;max-width:100%;align-self:center}
+.left{padding:18px 20px;display:flex;flex-direction:column;gap:12px;align-items:flex-start;position:relative}
 .cluebar{display:flex;gap:12px;align-items:baseline;min-height:26px}
 .cluebar b{font-family:'Newsreader',serif;font-size:20px}
 .pat{letter-spacing:.18em;font-weight:700}
@@ -81,6 +89,7 @@ const enumOf=d=>d.split(/([ -])/).map(x=>x===' '?',':x==='-'?'-':String(x.length
 const BYLEN={}; const DISP=new Map(); ENTRIES.forEach((d,i)=>{const k=key(d);(BYLEN[k.length]??=[]).push(k);DISP.set(k,d)});
 const WORDS=[...DISP.keys()]; const RANK=new Map(WORDS.map((w,i)=>[w,i]));
 let enums={}, words='any';
+const CLUES={'1a':'Subsequently, a fruit drink without ice (5)','5d':'Kept in check, as is half of this (3)'};
 const lid=l=>l.num+l.dir;
 const nwords=e=>e.split(/[,-]/).length;
 function wantedEnum(l){return enums[lid(l)]||String(l.cells.length)}
@@ -135,6 +144,8 @@ function chips(){return `<div class=chips>${[['any','Any'],['1','1 word'],['2','
 function sugList(l,cls=''){let s=suggestions(l).filter(x=>x.ok);if(popFilter)s=s.filter(x=>x.w.startsWith(popFilter));
  if(!s.length)return `<div class=hint>Nothing fits ${pattern(l).toUpperCase().replace(/\?/g,'·')}.</div>`;
  return s.map((x,k)=>`<div class="sug ${x.ok?'':'dead'} ${k===popSel&&cls?'on':''}" data-w="${x.w}"><span>${DISP.get(x.w)}${/[ -]/.test(DISP.get(x.w))?` <small>(${enumOf(DISP.get(x.w))})</small>`:''}</span></div>`).join('')}
+function clueList(){const l=curLight();const sec=(d,t)=>`<h4>${t}</h4>`+L.out.filter(x=>x.dir===d).map(x=>{const c=CLUES[lid(x)];return `<div class="crow ${x===l?'on':''}" data-l="${L.out.indexOf(x)}"><b>${x.num}</b><span class=ans><span class="dot ${c?'':'empty'}"></span>${shown(x)}</span>${c?`<span class=ct>${c}</span>`:`<span class=none>No clue yet</span>`}</div>`}).join('');
+ return `<div class=clues>${sec('a','Across')}${sec('d','Down')}</div>`}
 function render(){const app=document.getElementById('app');app.classList.toggle('dark',dark);const l=curLight();
  const label=l?`${l.num} ${l.dir==='a'?'across':'down'}`:'';
  let right='';
@@ -144,9 +155,9 @@ function render(){const app=document.getElementById('app');app.classList.toggle(
  app.innerHTML=`<div class=top><span class=logo>Setter</span><span class=seg><span class=on>Build grid</span><span>Write clues</span></span>
   <button class=btn id=np>New puzzle</button><span class=sp></span><span class=muted>${L.out.filter(x=>!pattern(x).includes('?')).length} of ${L.out.length} filled</span>
   <button class="btn primary" id=af>Fill the rest</button><button class="btn ghost" id=clr>Clear</button><button class="btn ghost" id=th>${dark?'Light':'Dark'}</button></div>
-  <div class="body ${right?'':'wide'}"><div class=left>
+  <div class="body"><div class=left>
   <div class=cluebar>${l?`<b>${label}</b><span class=pat>${shown(l)}</span><label class=enum title="How the answer splits into words, e.g. 4,5 or 3-4">(<input id=en value="${wantedEnum(l)}" size=6>)</label>`:''}</div>
-  ${gridHTML()}<div class=status>${status()}</div></div>${right}</div>
+  ${gridHTML()}<div class=status>${status()}</div></div>${clueList()}${right}</div>
   ${pop&&l?`<div class=pop id=pop style="left:${pop.x}px;top:${pop.y}px"><input class=filter id=pf placeholder="Type to narrow ${pattern(l).toUpperCase().replace(/\?/g,'·')}" value="${popFilter}">${chips()}<div class=list>${sugList(l,'pop')}</div></div>`:''}
   ${ctx?`<div class=ctx style="left:${ctx.x}px;top:${ctx.y}px"><div data-a=clear>Clear this answer</div><div data-a=fill>Fill just this answer</div></div>`:''}
   ${picker?`<div class=overlay><div class=picker><h3>Pick a grid</h3><div class=thumbs>${Object.entries(TEMPLATES).map(([k,rs])=>`<div class=thumb data-t="${k}"><div class=mini style="grid-template-columns:repeat(${rs.length},8px)">${rs.join('').split('').map(c=>`<i class="${c==='#'?'b':''}"></i>`).join('')}</div><span>${k}</span></div>`).join('')}</div></div></div>`:''}`;
@@ -164,7 +175,7 @@ document.addEventListener('click',e=>{const t=e.target;
  const th=t.closest('.thumb');if(th){setTemplate(th.dataset.t);return}
  const sg=t.closest('.sug');if(sg){if(!sg.classList.contains('dead')||confirm('That makes a crossing answer impossible. Place anyway?'))place(curLight(),sg.dataset.w);return}
  const ca=t.closest('.ctx div');if(ca){const a=ca.dataset.a,l=curLight();ctx=null;if(a==='words'){openPop();return}if(a==='clear')l.cells.forEach(c=>letters[c]='');if(a==='fill'){const s=suggestions(l,1)[0];if(s)place(l,s.w)}render();return}
- const row=t.closest('.row');if(row){const l=L.out[+row.dataset.l];dir=l.dir;cur=l.cells.find(c=>!letters[c])??l.cells[0];popFilter='';render();return}
+ const row=t.closest('.row,.crow');if(row){const l=L.out[+row.dataset.l];dir=l.dir;cur=l.cells.find(c=>!letters[c])??l.cells[0];popFilter='';render();return}
  const c=t.closest('.cell[data-i]');if(c){const i=+c.dataset.i;if(i===cur){if(lightAt(i,dir==='a'?'d':'a'))dir=dir==='a'?'d':'a'}else{cur=i;if(!lightAt(i,dir))dir=dir==='a'?'d':'a'}pop=null;ctx=null;popFilter='';render();return}
  if(!t.closest('.pop')&&!t.closest('.right')&&(pop||ctx)){pop=null;ctx=null;render()}});
 document.addEventListener('contextmenu',e=>{const c=e.target.closest('.cell[data-i]');if(!c)return;e.preventDefault();cur=+c.dataset.i;if(!lightAt(cur,dir))dir=dir==='a'?'d':'a';
