@@ -5,6 +5,7 @@ mod devices;
 
 use crate::lists::Indicators;
 use crate::text;
+use crate::thesaurus::Thesaurus;
 use crate::wordplay::Ctx;
 use serde::Serialize;
 
@@ -123,26 +124,12 @@ pub struct Tile {
     pub struck: bool,
 }
 
-/// Material that has to be fetched online for a column.
-#[derive(Serialize, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Online {
-    /// Synonyms and looser meanings of a word.
-    Meanings(String),
-    /// Straight definitions of the answer.
-    Definitions(String),
-    /// The answer's separate senses (double definition).
-    Senses(String),
-    /// Ideas linked to the answer (cryptic definition).
-    Linked(String),
-}
-
 #[derive(Serialize, Clone, Debug)]
 pub struct Column {
     pub title: String,
     pub tone: Tone,
     pub wide: bool,
     pub groups: Vec<(String, Vec<String>)>,
-    pub online: Option<Online>,
     /// item text -> highlighted byte ranges (hidden words, alternate letters)
     pub marks: Vec<(String, Vec<(usize, usize)>)>,
 }
@@ -166,7 +153,7 @@ pub struct DeviceView {
 pub const MAX_OPTIONS: usize = 12;
 
 /// Every device's material for `answer` (a grid pattern; '?' marks a blank).
-pub fn build(ctx: Ctx, ind: &Indicators, answer: &str) -> Vec<DeviceView> {
+pub fn build(ctx: Ctx, ind: &Indicators, th: &Thesaurus, answer: &str) -> Vec<DeviceView> {
     let key = text::key(answer);
     if answer.contains('?') || key.len() < 2 {
         return DeviceKind::ALL
@@ -180,7 +167,7 @@ pub fn build(ctx: Ctx, ind: &Indicators, answer: &str) -> Vec<DeviceView> {
     }
     DeviceKind::ALL
         .iter()
-        .map(|&kind| devices::build_one(ctx, ind, kind, &key))
+        .map(|&kind| devices::build_one(ctx, ind, th, kind, &key))
         .collect()
 }
 
@@ -188,11 +175,11 @@ pub fn build(ctx: Ctx, ind: &Indicators, answer: &str) -> Vec<DeviceView> {
 mod tests {
     use super::*;
     use crate::lists::Indicators;
-    use crate::wordplay::testutil::ctx;
+    use crate::wordplay::testutil::{ctx, thesaurus};
 
     #[test]
     fn orchestra_devices() {
-        let v = build(ctx(), &Indicators::bundled(), "orchestra");
+        let v = build(ctx(), &Indicators::bundled(), thesaurus(), "orchestra");
         let names: Vec<_> = v.iter().map(|d| d.kind.name()).collect();
         assert_eq!(
             names,
@@ -224,10 +211,21 @@ mod tests {
             .groups
             .iter()
             .any(|(_, items)| items.iter().any(|i| i == "gold")));
-        assert_eq!(
-            opt.columns[1].online,
-            Some(Online::Meanings("chest".into()))
+        let chest: Vec<&str> = opt.columns[1]
+            .groups
+            .iter()
+            .flat_map(|(_, v)| v.iter().map(String::as_str))
+            .collect();
+        assert!(
+            chest.contains(&"coffer") && chest.contains(&"box"),
+            "{chest:?}"
         );
+        let def: Vec<&str> = opt.columns[3]
+            .groups
+            .iter()
+            .flat_map(|(_, v)| v.iter().map(String::as_str))
+            .collect();
+        assert!(def.contains(&"band"), "{def:?}");
         assert!(
             v.iter()
                 .find(|d| d.kind == DeviceKind::Anagram)
@@ -245,9 +243,23 @@ mod tests {
     }
 
     #[test]
+    fn double_definition_has_a_column_per_sense() {
+        let v = build(ctx(), &Indicators::bundled(), thesaurus(), "pitch");
+        let dd = v
+            .iter()
+            .find(|d| d.kind == DeviceKind::DoubleDefinition)
+            .unwrap();
+        let cols = &dd.options[0].columns;
+        assert_eq!(cols.len(), 6);
+        assert!(cols
+            .iter()
+            .all(|c| c.title.contains(": ") && !c.groups.is_empty()));
+    }
+
+    #[test]
     fn blanks_and_tiny_answers_are_all_zero() {
         for a in ["orch?stra", "a", ""] {
-            assert!(build(ctx(), &Indicators::bundled(), a)
+            assert!(build(ctx(), &Indicators::bundled(), thesaurus(), a)
                 .iter()
                 .all(|d| d.count == 0 && d.options.is_empty()));
         }
@@ -255,19 +267,24 @@ mod tests {
 
     #[test]
     fn phrase_answers_use_letters_only() {
-        let v = build(ctx(), &Indicators::bundled(), "it is");
+        let v = build(ctx(), &Indicators::bundled(), thesaurus(), "it is");
         assert_eq!(v.len(), 13);
     }
 
     #[test]
     fn long_answers_do_not_panic() {
-        let v = build(ctx(), &Indicators::bundled(), "counterrevolution");
+        let v = build(
+            ctx(),
+            &Indicators::bundled(),
+            thesaurus(),
+            "counterrevolution",
+        );
         assert_eq!(v.len(), 13);
     }
 
     #[test]
     fn first_letters_has_column_per_letter() {
-        let v = build(ctx(), &Indicators::bundled(), "tempo");
+        let v = build(ctx(), &Indicators::bundled(), thesaurus(), "tempo");
         let fl = v
             .iter()
             .find(|d| d.kind == DeviceKind::FirstLetters)

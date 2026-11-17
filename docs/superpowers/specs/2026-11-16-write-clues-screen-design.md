@@ -143,3 +143,14 @@ Online-only columns say so in one line when offline.
   loading).
 - Whether the clue box offers a starting sentence. Asked, not yet answered;
   default is an empty box.
+
+## Later (user request, 2026-11-17, "only after it works")
+
+- Export / share so people can play together: candidates are a self-contained
+  playable HTML page, `.ipuz` (engine already exports), PDF, and a temporary
+  share link or live LAN session for solving together. Design when the core works.
+
+## Data decision (user, 2026-11-17)
+
+- Fully offline: no Datamuse or any online service. Synonyms, senses and linked
+  ideas come from a bundled thesaurus (Open English WordNet + Moby Thesaurus).

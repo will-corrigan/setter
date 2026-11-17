@@ -1,36 +1,31 @@
 //! One builder per device: finder results → `DeviceView`.
 
-use super::{Column, DeviceKind, DeviceOption, DeviceView, Online, Tile, Tone, MAX_OPTIONS};
+use super::{Column, DeviceKind, DeviceOption, DeviceView, Tile, Tone, MAX_OPTIONS};
 use crate::lists::Indicators;
+use crate::thesaurus::Thesaurus;
 use crate::wordplay::{self, Ctx, Part, Piece};
 
-pub(super) fn build_one(ctx: Ctx, ind: &Indicators, kind: DeviceKind, key: &str) -> DeviceView {
+pub(super) fn build_one(
+    ctx: Ctx,
+    ind: &Indicators,
+    th: &Thesaurus,
+    kind: DeviceKind,
+    key: &str,
+) -> DeviceView {
     let (count, options) = match kind {
-        DeviceKind::AlternateLetters => alternate_letters(ctx, ind, key),
-        DeviceKind::Anagram => anagram(ctx, ind, key),
-        DeviceKind::ChangeALetter => change_a_letter(ctx, ind, key),
-        DeviceKind::Charade => charade(ctx, ind, key),
-        DeviceKind::Container => container(ctx, ind, key),
-        DeviceKind::Deletion => deletion(ctx, ind, key),
-        DeviceKind::FirstLetters => first_letters(ctx, ind, key),
-        DeviceKind::Hidden => hidden(ctx, ind, key),
-        DeviceKind::Reversal => reversal(ctx, ind, key),
-        DeviceKind::SoundsLike => sounds_like(ctx, ind, key),
-        DeviceKind::Spoonerism => spoonerism(ctx, ind, key),
-        DeviceKind::CrypticDefinition => meaning_only(
-            ctx,
-            key,
-            "Misleading meaning",
-            "Things linked to it",
-            Online::Linked(key.into()),
-        ),
-        DeviceKind::DoubleDefinition => meaning_only(
-            ctx,
-            key,
-            "Two meanings",
-            "Meanings",
-            Online::Senses(key.into()),
-        ),
+        DeviceKind::AlternateLetters => alternate_letters(ctx, ind, th, key),
+        DeviceKind::Anagram => anagram(ctx, ind, th, key),
+        DeviceKind::ChangeALetter => change_a_letter(ctx, ind, th, key),
+        DeviceKind::Charade => charade(ctx, ind, th, key),
+        DeviceKind::Container => container(ctx, ind, th, key),
+        DeviceKind::Deletion => deletion(ctx, ind, th, key),
+        DeviceKind::FirstLetters => first_letters(ctx, ind, th, key),
+        DeviceKind::Hidden => hidden(ctx, ind, th, key),
+        DeviceKind::Reversal => reversal(ctx, ind, th, key),
+        DeviceKind::SoundsLike => sounds_like(ctx, ind, th, key),
+        DeviceKind::Spoonerism => spoonerism(ctx, ind, th, key),
+        DeviceKind::CrypticDefinition => cryptic_definition(ctx, th, key),
+        DeviceKind::DoubleDefinition => double_definition(ctx, th, key),
     };
     let mut options = options;
     options.truncate(MAX_OPTIONS);
@@ -51,14 +46,13 @@ fn column(title: impl Into<String>, tone: Tone) -> Column {
         tone,
         wide: false,
         groups: vec![],
-        online: None,
         marks: vec![],
     }
 }
 
-fn definition(key: &str) -> Column {
+fn definition(th: &Thesaurus, key: &str) -> Column {
     Column {
-        online: Some(Online::Definitions(key.into())),
+        groups: th.meanings(key, 80),
         ..column("Definition", Tone::Definition)
     }
 }
@@ -75,8 +69,14 @@ fn indicators(title: &str, ind: &Indicators, lists: &[(&str, &str)]) -> Column {
     }
 }
 
-/// A column for one wordplay part: abbreviation meanings first, then the word.
-fn part_column(title: impl Into<String>, part: Option<&Part>, letters: &str, tone: Tone) -> Column {
+/// A column for one wordplay part: abbreviation meanings first, then the word and its meanings.
+fn part_column(
+    th: &Thesaurus,
+    title: impl Into<String>,
+    part: Option<&Part>,
+    letters: &str,
+    tone: Tone,
+) -> Column {
     let mut col = column(title, tone);
     let Some(part) = part else {
         col.groups
@@ -88,30 +88,32 @@ fn part_column(title: impl Into<String>, part: Option<&Part>, letters: &str, ton
             col.groups.push(("Abbreviation".into(), meanings.clone()));
         }
     }
+    let mut word = None;
     for p in &part.options {
         match p {
-            Piece::Word { word } => {
-                col.groups.push(("Word".into(), vec![word.text.clone()]));
-                col.online
-                    .get_or_insert(Online::Meanings(word.text.clone()));
+            Piece::Word { word: w } => {
+                col.groups.push(("Word".into(), vec![w.text.clone()]));
+                word.get_or_insert(w.text.clone());
             }
-            Piece::Reversed { word } => {
-                col.groups
-                    .push(("Backwards".into(), vec![word.text.clone()]));
-                col.online
-                    .get_or_insert(Online::Meanings(word.text.clone()));
+            Piece::Reversed { word: w } => {
+                col.groups.push(("Backwards".into(), vec![w.text.clone()]));
+                word.get_or_insert(w.text.clone());
             }
             Piece::Abbrev { .. } => {}
         }
     }
+    if let Some(w) = word {
+        col.groups.extend(th.meanings(&w, 60));
+    }
     col
 }
 
-/// A column for a whole word (fetched meanings plus the word itself).
-fn word_column(title: impl Into<String>, word: &str, tone: Tone) -> Column {
+/// A column for a whole word: the word itself, then its meanings.
+fn word_column(th: &Thesaurus, title: impl Into<String>, word: &str, tone: Tone) -> Column {
+    let mut groups = vec![("Word".to_string(), vec![word.to_string()])];
+    groups.extend(th.meanings(word, 60));
     Column {
-        groups: vec![("Word".into(), vec![word.to_string()])],
-        online: Some(Online::Meanings(word.to_string())),
+        groups,
         ..column(title, tone)
     }
 }
@@ -139,7 +141,7 @@ fn first_label(part: &Part) -> String {
 
 // ---------- devices ----------
 
-fn alternate_letters(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn alternate_letters(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let found = wordplay::alternation::find(ctx, key);
     let mut options = vec![];
     for (odd, label) in [(true, "Odd letters"), (false, "Even letters")] {
@@ -165,7 +167,7 @@ fn alternate_letters(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
             reads_as: format!("{} of “{}”", label.to_lowercase(), items[0].source.text),
             columns: vec![
                 col,
-                definition(key),
+                definition(th, key),
                 indicators("Every-other words", ind, &[("Alternate", "alternate")]),
             ],
         });
@@ -188,7 +190,7 @@ fn alternate_marks(text: &str, odd: bool) -> Vec<(usize, usize)> {
     out
 }
 
-fn anagram(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn anagram(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let a = wordplay::anagram::find(ctx, key);
     let count = a.single.len() + a.two.len() + a.three.len();
     let groups: [(&str, Vec<String>); 3] = [
@@ -215,7 +217,7 @@ fn anagram(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 reads_as,
                 columns: vec![
                     letters,
-                    definition(key),
+                    definition(th, key),
                     indicators("Mixing words", ind, &[("Anagram", "anagram")]),
                 ],
             }
@@ -231,7 +233,7 @@ fn join(ws: &[wordplay::WordRef]) -> String {
         .join(" ")
 }
 
-fn change_a_letter(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn change_a_letter(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let subs = wordplay::substitution::find(ctx, key);
     let options = subs
         .iter()
@@ -247,6 +249,7 @@ fn change_a_letter(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 &src[i + 1..]
             );
             let mut from = part_column(
+                th,
                 format!("{} (out)", s.from.to_uppercase()),
                 None,
                 &s.from,
@@ -254,6 +257,7 @@ fn change_a_letter(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
             );
             from.groups = pieces_groups(&s.from_as, &s.from);
             let mut to = part_column(
+                th,
                 format!("{} (in)", s.to.to_uppercase()),
                 None,
                 &s.to,
@@ -276,10 +280,10 @@ fn change_a_letter(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                     s.from.to_uppercase()
                 ),
                 columns: vec![
-                    word_column(src.clone(), &s.source.text, Tone::P2),
+                    word_column(th, src.clone(), &s.source.text, Tone::P2),
                     from,
                     to,
-                    definition(key),
+                    definition(th, key),
                     indicators("Swap words", ind, &[("Substitution", "shift")]),
                 ],
             }
@@ -304,7 +308,7 @@ fn pieces_groups(pieces: &[Piece], letters: &str) -> Vec<(String, Vec<String>)> 
     groups
 }
 
-fn charade(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn charade(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let found = wordplay::charade::find(ctx, key);
     let options = found
         .iter()
@@ -315,10 +319,16 @@ fn charade(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 .iter()
                 .enumerate()
                 .map(|(n, p)| {
-                    part_column(p.letters.to_uppercase(), Some(p), &p.letters, Tone::part(n))
+                    part_column(
+                        th,
+                        p.letters.to_uppercase(),
+                        Some(p),
+                        &p.letters,
+                        Tone::part(n),
+                    )
                 })
                 .collect();
-            columns.push(definition(key));
+            columns.push(definition(th, key));
             columns.push(indicators("Joining words", ind, &[("Charade", "charade")]));
             DeviceOption {
                 label: c
@@ -346,7 +356,7 @@ fn charade(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
     (found.len(), options)
 }
 
-fn container(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn container(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let found = wordplay::container::find(ctx, key);
     let options = found
         .iter()
@@ -368,18 +378,20 @@ fn container(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 reads_as: format!("{} around {}", first_label(&c.outer), first_label(&c.inner)),
                 columns: vec![
                     part_column(
+                        th,
                         format!("{outer} (outside)"),
                         Some(&c.outer),
                         &c.outer.letters,
                         Tone::P1,
                     ),
                     part_column(
+                        th,
                         format!("{inner} (inside)"),
                         Some(&c.inner),
                         &c.inner.letters,
                         Tone::P2,
                     ),
-                    definition(key),
+                    definition(th, key),
                     indicators(
                         "Putting-in words",
                         ind,
@@ -395,7 +407,7 @@ fn container(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
     (found.len(), options)
 }
 
-fn deletion(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn deletion(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     use wordplay::deletion::Position;
     let d = wordplay::deletion::find(ctx, key);
     let count = d.literal.len() + d.anagram.len();
@@ -444,9 +456,9 @@ fn deletion(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 tiles: struck_tiles(&x.source.key, x.index, n),
                 reads_as: format!("{src} without {rem}"),
                 columns: vec![
-                    word_column(src.clone(), &x.source.text, Tone::P2),
+                    word_column(th, src.clone(), &x.source.text, Tone::P2),
                     removed,
-                    definition(key),
+                    definition(th, key),
                     removal(x.position, false),
                 ],
             }
@@ -467,9 +479,9 @@ fn deletion(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
             tiles: struck_tiles(&x.source.key, x.index, 1),
             reads_as: format!("{src} without {rem}, letters mixed"),
             columns: vec![
-                word_column(src.clone(), &x.source.text, Tone::P2),
+                word_column(th, src.clone(), &x.source.text, Tone::P2),
                 removed,
-                definition(key),
+                definition(th, key),
                 removal(x.position, true),
             ],
         }
@@ -477,7 +489,7 @@ fn deletion(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
     (count, options)
 }
 
-fn first_letters(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn first_letters(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let letters: Vec<char> = key.chars().collect();
     let make = |first: bool| {
         let mut columns: Vec<Column> = letters
@@ -501,7 +513,7 @@ fn first_letters(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 }
             })
             .collect();
-        columns.push(definition(key));
+        columns.push(definition(th, key));
         columns.push(if first {
             indicators("Initial words", ind, &[("First letters", "initial")])
         } else {
@@ -530,7 +542,7 @@ fn first_letters(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
     (2, vec![make(true), make(false)])
 }
 
-fn hidden(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn hidden(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let h = wordplay::hidden::find(ctx, key);
     let n = key.len();
     let count =
@@ -585,7 +597,7 @@ fn hidden(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 reads_as: format!("hidden in “{}”", items[0].0),
                 columns: vec![
                     col,
-                    definition(key),
+                    definition(th, key),
                     indicators("Hiding words", ind, &lists),
                 ],
             }
@@ -613,7 +625,7 @@ fn letter_ranges(text: &str, start: usize, len: usize) -> Vec<(usize, usize)> {
     out
 }
 
-fn reversal(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn reversal(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let r = wordplay::reversal::find(ctx, key);
     let options = r
         .words
@@ -626,8 +638,8 @@ fn reversal(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
             ],
             reads_as: format!("{} backwards", w.text),
             columns: vec![
-                word_column(w.key.to_uppercase(), &w.text, Tone::P2),
-                definition(key),
+                word_column(th, w.key.to_uppercase(), &w.text, Tone::P2),
+                definition(th, key),
                 indicators(
                     "Backwards words",
                     ind,
@@ -639,7 +651,7 @@ fn reversal(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
     (r.words.len(), options)
 }
 
-fn sounds_like(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn sounds_like(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let h = wordplay::homophone::find(ctx, key);
     let sound = || indicators("Sound words", ind, &[("Homophone", "homophone")]);
     let mut options: Vec<DeviceOption> = h
@@ -650,8 +662,8 @@ fn sounds_like(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
             tiles: whole(key),
             reads_as: format!("sounds like {}", w.text),
             columns: vec![
-                word_column(w.key.to_uppercase(), &w.text, Tone::P2),
-                definition(key),
+                word_column(th, w.key.to_uppercase(), &w.text, Tone::P2),
+                definition(th, key),
                 sound(),
             ],
         })
@@ -668,15 +680,15 @@ fn sounds_like(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
             columns: ws
                 .iter()
                 .enumerate()
-                .map(|(n, w)| word_column(w.key.to_uppercase(), &w.text, Tone::part(n)))
-                .chain([definition(key), sound()])
+                .map(|(n, w)| word_column(th, w.key.to_uppercase(), &w.text, Tone::part(n)))
+                .chain([definition(th, key), sound()])
                 .collect(),
         }
     }));
     (h.single.len() + h.pairs.len(), options)
 }
 
-fn spoonerism(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
+fn spoonerism(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     let found = wordplay::spoonerism::find(ctx, key);
     let options = found
         .iter()
@@ -695,9 +707,9 @@ fn spoonerism(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
                 ],
                 reads_as: format!("{from} with first sounds swapped"),
                 columns: vec![
-                    word_column(s.from[0].key.to_uppercase(), &s.from[0].text, Tone::P1),
-                    word_column(s.from[1].key.to_uppercase(), &s.from[1].text, Tone::P2),
-                    definition(key),
+                    word_column(th, s.from[0].key.to_uppercase(), &s.from[0].text, Tone::P1),
+                    word_column(th, s.from[1].key.to_uppercase(), &s.from[1].text, Tone::P2),
+                    definition(th, key),
                     indicators("Spooner words", ind, &[("Spoonerism", "spoonerism")]),
                 ],
             }
@@ -706,24 +718,55 @@ fn spoonerism(ctx: Ctx, ind: &Indicators, key: &str) -> Built {
     (found.len(), options)
 }
 
-fn meaning_only(ctx: Ctx, key: &str, label: &str, title: &str, online: Online) -> Built {
-    if !ctx.lex.contains(key) {
+fn cryptic_definition(ctx: Ctx, th: &Thesaurus, key: &str) -> Built {
+    let linked = th.linked(key, 80);
+    if !ctx.lex.contains(key) || linked.is_empty() {
         return (0, vec![]);
     }
     let col = Column {
         wide: true,
-        online: Some(online),
-        ..column(title, Tone::P1)
-    };
-    let columns = if title == "Meanings" {
-        vec![col]
-    } else {
-        vec![col, definition(key)]
+        groups: linked,
+        ..column("Things linked to it", Tone::P1)
     };
     (
         1,
         vec![DeviceOption {
-            label: label.into(),
+            label: "Misleading meaning".into(),
+            tiles: whole(key),
+            reads_as: String::new(),
+            columns: vec![col, definition(th, key)],
+        }],
+    )
+}
+
+/// Most senses shown for a double definition.
+const MAX_SENSES: usize = 6;
+
+fn double_definition(ctx: Ctx, th: &Thesaurus, key: &str) -> Built {
+    let senses: Vec<_> = th
+        .senses(key, MAX_SENSES * 2)
+        .into_iter()
+        .filter(|s| !s.words.is_empty())
+        .take(MAX_SENSES)
+        .collect();
+    if !ctx.lex.contains(key) || senses.len() < 2 {
+        return (0, vec![]);
+    }
+    let columns = senses
+        .iter()
+        .enumerate()
+        .map(|(n, s)| {
+            let short: Vec<&str> = s.gloss.split_whitespace().take(5).collect();
+            Column {
+                groups: vec![("Words".into(), s.words.clone())],
+                ..column(format!("{}: {}", s.pos, short.join(" ")), Tone::part(n))
+            }
+        })
+        .collect();
+    (
+        senses.len(),
+        vec![DeviceOption {
+            label: "Two meanings".into(),
             tiles: whole(key),
             reads_as: String::new(),
             columns,

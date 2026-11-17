@@ -163,6 +163,11 @@ pub(crate) mod testutil {
         A.get_or_init(Abbreviations::bundled)
     }
 
+    pub fn thesaurus() -> &'static crate::thesaurus::Thesaurus {
+        static T: OnceLock<crate::thesaurus::Thesaurus> = OnceLock::new();
+        T.get_or_init(crate::thesaurus::Thesaurus::bundled)
+    }
+
     pub fn ctx() -> super::Ctx<'static> {
         super::Ctx::new(lex(), abbr())
     }

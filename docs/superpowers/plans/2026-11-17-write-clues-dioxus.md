@@ -507,3 +507,39 @@ pub fn build(ctx: Ctx, ind: &Indicators, answer: &str) -> Vec<DeviceView>
   - Data credits, pointing to `data/NOTICE.md`.
 - [ ] **Step 2:** Run `cargo test --workspace` and `dx build --platform desktop --release`. Expected: success.
 - [ ] **Step 3: Commit** — `docs: README with dev and Windows build instructions`
+
+---
+
+## Amendment (2026-11-17): fully offline, and a design system before pages
+
+The user chose **fully offline** (no Datamuse) and asked for a **proper design system** before pages are built. Pages will then be built by orchestration.
+
+**Task 6 is replaced by "Offline thesaurus":**
+
+- **Data:** `scripts/build_thesaurus.py` builds three files:
+  - `data/wordnet.tsv.gz`: Open English WordNet 2025, CC BY 4.0.
+  - `data/wordnet-index.tsv.gz`: each word's senses, most common first.
+  - `data/moby.tsv.gz`: Moby Thesaurus II, public domain.
+  - Attribution goes in `data/NOTICE.md`.
+- **Engine:** a new module `crates/engine/src/thesaurus.rs`, bundled via `include_bytes!` and parsed lazily. It provides:
+  - `pub struct Sense { pub pos: char, pub gloss: String, pub words: Vec<String> }`. `words` holds synonyms, then broader terms, then narrower terms, excluding the word itself.
+  - `Thesaurus::bundled() -> Thesaurus`
+  - `senses(&self, word: &str, max: usize) -> Vec<Sense>`, in WordNet's order.
+  - `meanings(&self, word: &str, limit: usize) -> Vec<(String, Vec<String>)>`, with groups "Synonyms" (WordNet members, all senses), "Broader" (hypernyms) and "Related" (Moby). Deduplicated, excluding the word, at most `limit` items in total.
+  - `linked(&self, word: &str, limit: usize) -> Vec<(String, Vec<String>)>`, with groups "Kinds", "Is a kind of", "Parts", "Part of", "Members", "Member of", "Related" and "Associated" (Moby). Empty groups are dropped.
+- **Bank:**
+  - `bank::build(ctx, ind, th: &Thesaurus, answer)`. `Online` and `Column.online` are removed.
+  - Part and word columns append `th.meanings(word, 60)`.
+  - The Definition column is `th.meanings(answer, 80)`.
+  - Double definition: one column per sense (at most 6), titled `"<pos>: <first 5 words of gloss>"`, with part tones.
+  - Cryptic definition: one wide "Things linked to it" column from `th.linked(answer, 80)`, plus Definition.
+- **App:** `app/src/online.rs` and the `reqwest` dependency are removed. The Global Constraints line about offline notices no longer applies.
+
+**Task 9 is replaced by "Design system":**
+
+- `app/assets/tokens.css` and `app/assets/components.css`.
+- `app/src/ds/`: typed components built on the official Dioxus Primitives and copied-in Dioxus Components (via `dx components add`), restyled with our tokens. No Tailwind.
+- The custom crossword components: Tiles, WordColumn, ClueField, DeviceNav.
+- An in-app **component gallery** (`--gallery`), in light and dark, for the user to review.
+
+**Pages** (Write clues, then Build grid after a design session) are built afterwards via `/orchestration`, using only `ds` components.
