@@ -1,5 +1,6 @@
 //! Setter: a cryptic crossword setter's desktop app.
 
+mod answers;
 mod files;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
