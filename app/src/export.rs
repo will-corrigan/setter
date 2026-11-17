@@ -2,7 +2,7 @@
 
 #![allow(dead_code)] // wired into the top bar's Export menu
 
-use xw_engine::export::{exolve, puz};
+use xw_engine::export::{player, puz};
 use xw_engine::puzzle::Puzzle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +60,7 @@ pub fn file_stem(title: &str) -> String {
 /// The bytes to write for a format.
 pub fn render(p: &Puzzle, format: ExportFormat) -> Result<Vec<u8>, String> {
     match format {
-        ExportFormat::WebPage => Ok(exolve::html(p).into_bytes()),
+        ExportFormat::WebPage => Ok(player::html(p).into_bytes()),
         ExportFormat::Puz => puz::puz(p),
         ExportFormat::Ipuz => serde_json::to_vec_pretty(&p.to_ipuz()).map_err(|e| e.to_string()),
     }

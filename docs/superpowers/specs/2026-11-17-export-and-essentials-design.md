@@ -10,8 +10,11 @@ filetypes … that are popular."
 ## What's missing for that morning workflow
 
 1. **Export.** The engine can produce:
-   - a self-contained **web page** (Exolve player inlined; verified in headless
-     Chromium),
+   - a self-contained **web page**: Setter's own player, styled like the app.
+     (Exolve was tried first; the user found it ugly.) It has check and reveal
+     by letter, word or grid, a timer, an anagram helper, confetti with the
+     solve time, saved progress, print, phone layout and dark mode. Verified in
+     headless Chromium.
    - **.puz** (Across Lite; checksums verified with puzpy),
    - **.ipuz**.
 
@@ -35,8 +38,8 @@ filetypes … that are popular."
   title as the file name.
   - If .puz isn't possible because squares are empty, a Notice gives the
     reason: "Fill every square before exporting .puz."
-  - The web page and ipuz export unfinished grids too; Exolve shows "?"
-    squares, and ipuz uses null.
+  - The web page and ipuz export unfinished grids too. The page then hides
+    check and reveal, and ipuz uses null.
   - After a successful export, a short Notice confirms it: "Exported
     <name>.html".
 - **Puzzle details:** click the title in the top bar to edit it, plus the
@@ -47,8 +50,8 @@ filetypes … that are popular."
   is newer than `last_file`, or there's no last file, it's opened, with a
   Notice: "Recovered unsaved work." Saving to a real file keeps the autosave in
   step.
-- **Annotations in exports:** a clue's annotation field already goes into the
-  Exolve page, which reveals it with "Reveal all".
+- **Annotations in exports:** each clue's annotation appears under it in the
+  player once the puzzle is solved.
 
 ## Out of scope tonight
 

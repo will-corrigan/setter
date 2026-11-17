@@ -1,5 +1,5 @@
-//! Exporting a puzzle: a playable web page (Exolve), .puz (Across Lite) and
+//! Exporting a puzzle: a playable web page (Setter's own player), .puz (Across Lite) and
 //! .ipuz (see `Puzzle::to_ipuz`).
 
-pub mod exolve;
+pub mod player;
 pub mod puz;
