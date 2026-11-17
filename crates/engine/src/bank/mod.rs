@@ -291,6 +291,47 @@ mod tests {
         assert!(!crate::text::is_offensive("niggard"));
     }
 
+    /// Slurs reported by the final review on everyday answers.
+    const SLURS: &[&str] = &[
+        "jigaboo",
+        "nigra",
+        "pickaninny",
+        "darkey",
+        "wop",
+        "dago",
+        "ginzo",
+        "greaseball",
+        "honky",
+        "honkie",
+        "honkey",
+        "jungle bunny",
+        "ofay",
+        "slant-eye",
+        "sambo",
+    ];
+
+    #[test]
+    fn sensitive_answers_list_no_slurs() {
+        for answer in ["black", "white", "italian", "whitey", "negro", "mongrel"] {
+            for d in build(ctx(), &Indicators::bundled(), thesaurus(), answer) {
+                for item in d
+                    .options
+                    .iter()
+                    .flat_map(|o| &o.columns)
+                    .flat_map(|c| &c.groups)
+                    .flat_map(|(_, i)| i)
+                {
+                    let low = item.to_lowercase();
+                    assert!(
+                        !SLURS.contains(&low.as_str()),
+                        "{answer}/{}: {item}",
+                        d.kind.name()
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn blanks_and_tiny_answers_are_all_zero() {
         for a in ["orch?stra", "a", ""] {

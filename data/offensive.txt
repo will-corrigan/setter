@@ -13,8 +13,6 @@ wogs
 golliwog
 paki
 pakis
-chink
-chinks
 gook
 gooks
 jap
@@ -23,7 +21,6 @@ slanteye
 wetback
 wetbacks
 spic
-spick
 spics
 beaner
 beaners
@@ -55,3 +52,29 @@ cunts
 fuck
 fucker
 fucking
+
+# Case-sensitive entries (capitalised) only match that exact capitalisation:
+Chink
+Chinks
+jigaboo
+jigaboos
+nigra
+pickaninny
+pickaninnies
+darkey
+wop
+wops
+dago
+dagos
+ginzo
+greaseball
+greaseballs
+honky
+honkie
+honkey
+honkies
+junglebunny
+ofay
+sambo
+sambos
+slanteyes

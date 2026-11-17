@@ -23,6 +23,10 @@ from pathlib import Path
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 
+SLUR_MARKERS = ("ethnic slur", "offensive term", "offensive name", "offensive word", "(offensive)",
+                "disparaging term", "(disparaging)", "derogatory term", "(derogatory)", "offensive slang")
+
+
 def main(oewn_zip, moby_txt):
     z = zipfile.ZipFile(oewn_zip)
     synsets = {}
@@ -32,6 +36,20 @@ def main(oewn_zip, moby_txt):
         data = json.loads(z.read(name))
         if isinstance(data, dict):
             synsets.update({k: v for k, v in data.items() if isinstance(v, dict) and "members" in v})
+    # Drop senses WordNet itself marks as slurs or disparaging terms, and words
+    # that exist only as such (they're also removed from Moby below).
+    def is_slur(syn):
+        gloss = " ".join(syn.get("definition", [])).lower()
+        return any(m in gloss for m in SLUR_MARKERS)
+
+    slur_ids = {sid for sid, syn in synsets.items() if is_slur(syn)}
+    slur_lemmas = {m.replace("_", " ").lower() for sid in slur_ids for m in synsets[sid].get("members", [])}
+    clean_lemmas = {m.replace("_", " ").lower() for sid, syn in synsets.items() if sid not in slur_ids for m in syn.get("members", [])}
+    slur_only = slur_lemmas - clean_lemmas
+    for sid in slur_ids:
+        del synsets[sid]
+    print(f"dropped {len(slur_ids)} slur senses; {len(slur_only)} slur-only words")
+
     ids = sorted(synsets)
     index = {sid: i for i, sid in enumerate(ids)}
 
@@ -39,7 +57,7 @@ def main(oewn_zip, moby_txt):
            ("hyper", "hypo", "parts", "part_of", "members", "member_of", "related")}
 
     def link(kind, a, b):
-        if b in index:
+        if a in index and b in index:
             rel[kind][index[a]].append(index[b])
 
     for sid, s in synsets.items():
@@ -87,9 +105,9 @@ def main(oewn_zip, moby_txt):
     with open(moby_txt, encoding="latin-1") as src, gzip.open(DATA / "moby.tsv.gz", "wt", encoding="utf-8", compresslevel=9) as f:
         f.write("# Moby Thesaurus II (public domain) — see data/NOTICE.md\n")
         for line in src:
-            line = line.strip()
-            if line:
-                f.write(line + "\n")
+            words = [w for w in line.strip().split(",") if w and w.lower() not in slur_only]
+            if len(words) > 1 and words[0].lower() not in slur_only:
+                f.write(",".join(words) + "\n")
                 n += 1
     print(f"wrote {n} moby entries")
 

@@ -26,8 +26,10 @@ fn fold_accent(c: char) -> char {
 
 static OFFENSIVE: &str = include_str!("../../../data/offensive.txt");
 
-/// Does any word of `s` appear in the built-in offensive-words list?
-/// Whole words only: "niggard" and "scunthorpe" are fine.
+/// Is `s` (a word or phrase) on the built-in offensive list? Matches any word
+/// of it, or the whole item with spaces and hyphens removed ("slant-eye").
+/// Lowercase list entries match any case; capitalised ones only that case
+/// ("Chink" is blocked, "chink" — a gap — is not). "niggard" is fine.
 pub fn is_offensive(s: &str) -> bool {
     use std::collections::HashSet;
     use std::sync::OnceLock;
@@ -39,9 +41,13 @@ pub fn is_offensive(s: &str) -> bool {
             .filter(|l| !l.is_empty() && !l.starts_with('#'))
             .collect()
     });
-    s.split(|c: char| !c.is_alphabetic())
+    // Lowercase entries match any case; capitalised entries match exactly.
+    let hit = |w: &str| set.contains(w.to_lowercase().as_str()) || set.contains(w);
+    let words: Vec<&str> = s
+        .split(|c: char| !c.is_alphabetic())
         .filter(|w| !w.is_empty())
-        .any(|w| set.contains(w.to_lowercase().as_str()))
+        .collect();
+    words.iter().any(|w| hit(w)) || (words.len() > 1 && hit(&words.concat()))
 }
 
 /// Letter histogram of a key.
@@ -117,6 +123,17 @@ pub fn enumeration(display: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn offensive_matching() {
+        assert!(is_offensive("slant-eye"));
+        assert!(is_offensive("jungle bunny"));
+        assert!(is_offensive("Chink"));
+        assert!(!is_offensive("chink"));
+        assert!(!is_offensive("vocal chink"));
+        assert!(!is_offensive("spick and span"));
+        assert!(!is_offensive("niggard"));
+    }
 
     #[test]
     fn keys_strip_punctuation() {
