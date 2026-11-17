@@ -11,6 +11,8 @@ pub mod crossword_grid;
 mod discipline;
 pub mod empty_state;
 pub mod icon;
+pub mod inline_edit;
+pub mod menu_button;
 pub mod note;
 pub mod notice;
 pub mod prose;

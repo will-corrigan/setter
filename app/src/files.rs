@@ -171,6 +171,9 @@ pub struct Settings {
     pub theme: Theme,
     #[serde(default)]
     pub last_file: Option<PathBuf>,
+    /// Put on new puzzles and shown in exports.
+    #[serde(default)]
+    pub setter_name: String,
 }
 
 /// A `<head>` script applying a saved Light/Dark theme before the first paint
@@ -307,6 +310,17 @@ mod tests {
     }
 
     #[test]
+    fn setter_name_is_remembered() {
+        let d = temp_dir("settername");
+        let s = Settings {
+            setter_name: "Gussalufz".into(),
+            ..Default::default()
+        };
+        save_settings_to(&d, &s);
+        assert_eq!(load_settings_from(&d).setter_name, "Gussalufz");
+    }
+
+    #[test]
     fn settings_default_on_garbage() {
         let d = temp_dir("settings");
         fs::write(d.join("settings.json"), "{oops").unwrap();
@@ -314,6 +328,7 @@ mod tests {
         let s = Settings {
             theme: Theme::Dark,
             last_file: Some("x.xword".into()),
+            ..Default::default()
         };
         save_settings_to(&d, &s);
         assert_eq!(load_settings_from(&d), s);

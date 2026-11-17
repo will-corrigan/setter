@@ -7,6 +7,7 @@
 //! - [`grid`], [`fill`], [`puzzle`]: grid model, fill suggestions/autofill, save format
 
 pub mod bank;
+pub mod export;
 pub mod fill;
 pub mod grid;
 pub mod lexicon;

@@ -169,6 +169,7 @@
   --column-max-height: 430px;
   --tile-size: 28px;
   --empty-min-height: 200px;
+  --menu-min-width: 180px;
   --answer-nav-width: 220px; /* room for a 15-letter answer and its label */
   --icon-size: 16px;
   --popover-width: 290px;    /* its four word-count chips fit on one row */

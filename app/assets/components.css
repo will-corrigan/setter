@@ -396,3 +396,32 @@ button, input, textarea { font: inherit; color: inherit; }
 /* Only say the word bank is on its way if it takes a while. */
 .word-bank-pending { animation: appear var(--dur) var(--ease) calc(var(--dur) * 3) both; }
 @keyframes appear { from { opacity: 0; } }
+
+/* ---------- menu button ---------- */
+.menu-button { position: relative; display: inline-block; }
+.menu-button__trigger {
+  border: var(--border) solid var(--line-strong); background: var(--raised); color: var(--text);
+  border-radius: var(--radius-m); padding: var(--space-1) var(--space-3); cursor: pointer; font-size: var(--text-base);
+}
+.menu-button__trigger[aria-expanded="true"] { border-color: var(--text); }
+.menu-button__backdrop { position: fixed; inset: 0; z-index: 30; }
+.menu-button__list {
+  position: absolute; top: calc(100% + var(--space-1)); right: 0; z-index: 31; min-width: var(--menu-min-width);
+  background: var(--raised); border: var(--border) solid var(--line-strong); border-radius: var(--radius-m);
+  box-shadow: var(--shadow-2); padding: var(--space-1); display: grid;
+}
+.menu-button__item {
+  text-align: left; border: 0; background: none; color: var(--text); border-radius: var(--radius-s);
+  padding: var(--space-1-5) var(--space-2-5); cursor: pointer;
+}
+.menu-button__item:hover, .menu-button__item:focus-visible { background: var(--canvas); }
+
+/* ---------- inline edit ---------- */
+.inline-edit {
+  font: inherit; color: var(--text); background: none; border: var(--border) solid transparent;
+  border-radius: var(--radius-s); padding: var(--space-0-75) var(--space-1-5); cursor: text; max-width: 22ch;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.inline-edit:hover { border-color: var(--line); }
+.inline-edit.is-placeholder { color: var(--faint); }
+.inline-edit--input { border-color: var(--text); background: var(--surface); outline: none; }
