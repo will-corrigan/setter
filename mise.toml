@@ -75,3 +75,7 @@ run = [
   "{{config_root}}/scripts/in-env.sh cargo clippy --workspace --all-targets -- -D warnings",
 ]
 run_windows = ["cargo fmt --all --check", "cargo clippy --workspace --all-targets -- -D warnings"]
+
+[tasks.desktop-entry]
+description = "Linux: add a Setter launcher and icon (taskbar, Start menu under WSLg)"
+run = "{{config_root}}/scripts/install-desktop-entry.sh"
