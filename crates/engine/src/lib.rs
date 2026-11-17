@@ -6,6 +6,7 @@
 //!   homophone, letter-shift, substitution and alternate-letter finders
 //! - [`grid`], [`fill`], [`puzzle`]: grid model, fill suggestions/autofill, save format
 
+pub mod bank;
 pub mod fill;
 pub mod grid;
 pub mod lexicon;
