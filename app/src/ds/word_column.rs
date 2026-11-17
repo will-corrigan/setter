@@ -71,14 +71,12 @@ pub fn WordColumn(
                 span { "{column.title}" }
                 span { class: "count", "{total}" }
             }
-            if total > 8 {
-                input {
-                    class: "word-column__filter",
-                    placeholder: "Filter",
-                    "aria-label": "Filter {column.title}",
-                    value: "{query}",
-                    oninput: move |e| query.set(e.value()),
-                }
+            input {
+                class: "word-column__filter",
+                placeholder: "Filter",
+                "aria-label": "Filter {column.title}",
+                value: "{query}",
+                oninput: move |e| query.set(e.value()),
             }
             div { class: "word-column__list", role: "listbox", "aria-label": "{column.title}",
                 if groups.is_empty() {
@@ -167,5 +165,9 @@ mod tests {
         assert!(html.contains(">2<"), "{html}");
         assert!(html.contains(r#"aria-selected="true""#), "{html}");
         assert!(html.contains(r#"data-tone="p2""#), "{html}");
+        assert!(
+            html.contains("word-column__filter"),
+            "every column has a filter: {html}"
+        );
     }
 }
