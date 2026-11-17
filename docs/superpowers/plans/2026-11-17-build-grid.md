@@ -30,7 +30,12 @@ Mockup: `docs/design/build-grid-mockup.html`.
   in `tokens.css` that do not change in dark mode.
 - **Word breaks:** a thick bar between words, and a short dash across the
   border for a hyphen. The answer bar's pattern shows the same breaks.
-- **Right-click menu:** exactly "Clear this answer" and "Fill just this answer".
+- **Right-click or Ctrl+Space** opens the words popover beside the answer. It
+  has icon buttons (tooltips only) for "Fill just this answer" and "Clear this
+  answer". There is no side panel, no toggle, and no separate context menu.
+- **The clue list** sits beside the grid in two fixed columns. Each row is
+  number, clue and enumeration; there is an amber "no clue" tag when missing.
+  It scrolls vertically only. No horizontal scrollbars anywhere.
 - **Splits** are stored as `Clue.enumeration`. A split that doesn't add up to
   the answer's length is ignored.
 - **Design system only**, styled through tokens. New reusable pieces go in
@@ -224,25 +229,25 @@ Mockup: `docs/design/build-grid-mockup.html`.
 - Create new ds components:
   - `ds/crossword_grid.rs` (the grid, with selection, separators and fixed
     colours),
-  - `ds/word_panel.rs` (search, word-count chips via `Segmented { pills }`,
-    the list),
+  - `ds/word_popover.rs` (header with the wand and eraser icon buttons,
+    search, word-count chips via `Segmented { pills }`, the list),
+  - `ds/clue_sheet.rs` (the clue list) and `ds/icon.rs`,
   - `ds/template_picker.rs` (thumbnail grid),
-  - `ds/context_menu.rs`, preferably on the official `context_menu`
-    component: `dx components add context_menu`, restyled with tokens.
 - Modify: `shell.rs` (the Build grid mode renders the page; top bar gets New
   puzzle, Fill the rest, Undo/Redo with tooltips), `tokens.css` (grid tokens),
   `components.css`, `gallery.rs`.
 
-**Behaviour:** three columns: grid block on the left (top-aligned), clue list
-in the middle, word panel on the right (about 290 px; token
-`--word-panel-width`). The clue list is a new ds component,
-`ds/answer_list.rs` (`AnswerList { items: Vec<AnswerRow>, current, on_select }`,
-where `AnswerRow { key, label, letters, clue: Option<String> }`). It shows a
-filled or hollow dot, the letters, and a clue preview or "No clue yet". It gets
-an SSR test and a gallery entry. Then the spec's Layout section and the mockup, using the Task 1–4
+**Behaviour:** the left column holds the answer bar, grid and status. The
+right column holds the clue list, a new ds component `ds/clue_sheet.rs`:
+`ClueSheet { across: Vec<ClueRow>, down: Vec<ClueRow>, current: Option<String>, on_select }`,
+where `ClueRow { key, number, clue: Option<String>, enumeration }`. It gets an
+SSR test (no answer text rendered; "no clue" tag present) and a gallery entry.
+The words popover is a new ds component `ds/word_popover.rs`. It is anchored to
+the selected answer and has icon buttons via a new `ds/icon.rs` (inline SVG
+wand and eraser, `aria-label` and tooltip). Then the spec's Layout section and the mockup, using the Task 1–4
 interfaces:
 - `grid_status` for the status line,
-- `safe_suggestions` for the panel (limit 120, filtered by the search box
+- `safe_suggestions` for the popover (limit 120, filtered by the search box
   prefix),
 - An **Add to my words** action next to each status `non_words` entry. It uses
   `display_with_split` and `add_own_word`, reloads the engine data off the UI
