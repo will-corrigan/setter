@@ -58,21 +58,43 @@ indicators are all built in.
     - **Across Lite** (`.puz`), once every square is filled.
     - **ipuz** (`.ipuz`).
 
-## Developing (NixOS / WSL)
+## Developing
 
-The Nix flake provides Rust, the `dx` CLI and the WebKitGTK libraries.
+[mise](https://mise.jdx.dev) sets everything up, the same way on every OS. `mise.toml`
+pins Rust and the Dioxus CLI (`dx`), lists the system libraries each OS needs, and
+names the everyday commands.
 
 ```bash
-nix develop
-cargo test --workspace                     # engine + app tests
-cd app && dx serve --platform desktop      # run with live reload
-dx serve --platform desktop -- --gallery   # the component gallery
+mise install                      # Rust 1.99.1 and dx 0.7.10
+mise bootstrap packages apply     # Linux only: WebKitGTK etc. via apt, dnf, pacman or zypper
+mise run app                      # run Setter with live reload
+mise run test                     # every test
+mise run lint                     # rustfmt and clippy
+mise run gallery                  # every design-system component
+mise run bundle                   # an installer for this OS
 ```
 
-Always build the app through `dx`, not plain `cargo run`. The bundled fonts and
-stylesheets only load under `dx`. Under WSLg, run the built binary inside the dev
-shell (`nix develop --command target/dx/setter/debug/linux/app/setter`). Outside it,
-WebKitGTK renders a broken page.
+What each OS needs besides mise:
+
+| OS | System libraries |
+|---|---|
+| macOS | Xcode's command-line tools (`xcode-select --install`); the webview is built in |
+| Windows | Microsoft C++ Build Tools ("Desktop development with C++"); WebView2 is built into Windows 10 and 11 |
+| Debian, Ubuntu, Fedora, Arch, openSUSE | `mise bootstrap packages apply` (it uses sudo) |
+| NixOS | nothing: `flake.nix` provides them, and the tasks use it automatically through `scripts/in-env.sh`. Rust from mise needs nix-ld enabled. |
+
+Always build the app through `dx` (the tasks do), not plain `cargo run`. The bundled
+fonts and stylesheets only load under `dx`. To run a built binary yourself on NixOS,
+go through the same wrapper: `scripts/in-env.sh target/dx/setter/debug/linux/app/setter`.
+Outside it, WebKitGTK can't find its schemas and renders a broken page.
+
+`dx bundle` only builds installers for the OS it runs on, so build each one on its own
+OS: `.msi`/`.exe` on Windows, `.app`/`.dmg` on macOS, `.deb`/`.AppImage` on Linux. They
+land under `target/dx/setter/bundle/`. An unsigned Mac app needs right-click → Open the
+first time.
+
+Regenerating the word data (`scripts/build_lexicon.py`, `scripts/build_thesaurus.py`)
+needs any Python 3; they use the standard library only.
 
 Dev-only hooks, for screenshots and driving the app in WSLg, where synthetic input
 doesn't reach windows:
@@ -84,17 +106,8 @@ doesn't reach windows:
 - `scripts/winshot.ps1`: capture a window from WSL via Windows PowerShell, e.g.
   `-Title Setter -Out "$(wslpath -w .scratch)\shot.png"`.
 
-Scratch files stay in the repo. Screenshots and dev scripts go in `.scratch/`, which git ignores. Tests write under `target/scratch`.
-
-## Building for Windows
-
-`dx bundle` only builds installers for the OS it runs on, so build on Windows itself:
-
-1. Install Rust with the MSVC toolchain (<https://rustup.rs>) and WebView2. WebView2 is
-   preinstalled on Windows 10 and 11.
-2. Install the Dioxus CLI: `cargo install dioxus-cli --version 0.7.10 --locked`.
-3. In the repo: `cd app` then `dx bundle --platform desktop --release`. This writes an
-   MSI/NSIS installer under `target/dx/setter/bundle/`.
+Scratch files stay in the repo. Screenshots and dev scripts go in `.scratch/`, which git
+ignores. Tests write under `target/scratch`.
 
 ## Making it yours
 

@@ -1,0 +1,77 @@
+# Setter's development setup, the same on every OS:
+#   mise install                       Rust and dx, at the versions below
+#   mise bootstrap packages apply      Linux only: the webview libraries, via apt/dnf/pacman/zypper
+#   mise run app                       run the app (live reload)
+#   mise tasks                         everything else
+# NixOS gets the webview libraries from flake.nix instead; the tasks use it
+# automatically (scripts/in-env.sh). macOS and Windows have their webview built in.
+# Regenerating the word data (scripts/*.py) needs any Python 3; standard library only.
+
+[tools]
+rust = { version = "1.99.1", components = "clippy,rustfmt,rust-analyzer,rust-src" }
+# dx, the Dioxus CLI: prebuilt for Linux, macOS and Windows.
+"github:DioxusLabs/dioxus" = { version = "0.7.10", bin = "dx" }
+
+# WebKitGTK and friends, for building on Linux. Each line installs with whichever
+# of these package managers the machine has; the others are skipped.
+[bootstrap.packages]
+"apt:build-essential" = { os = "linux" }
+"apt:pkg-config" = { os = "linux" }
+"apt:libwebkit2gtk-4.1-dev" = { os = "linux" }
+"apt:libxdo-dev" = { os = "linux" }
+"apt:libssl-dev" = { os = "linux" }
+"apt:librsvg2-dev" = { os = "linux" }
+"dnf:gcc" = { os = "linux" }
+"dnf:gcc-c++" = { os = "linux" }
+"dnf:make" = { os = "linux" }
+"dnf:pkgconf-pkg-config" = { os = "linux" }
+"dnf:webkit2gtk4.1-devel" = { os = "linux" }
+"dnf:libxdo-devel" = { os = "linux" }
+"dnf:openssl-devel" = { os = "linux" }
+"dnf:librsvg2-devel" = { os = "linux" }
+"pacman:base-devel" = { os = "linux" }
+"pacman:webkit2gtk-4.1" = { os = "linux" }
+"pacman:xdotool" = { os = "linux" }
+"pacman:openssl" = { os = "linux" }
+"pacman:librsvg" = { os = "linux" }
+"zypper:pattern:devel_basis" = { os = "linux" }
+"zypper:webkit2gtk3-devel" = { os = "linux" }
+"zypper:libopenssl-devel" = { os = "linux" }
+"zypper:librsvg-devel" = { os = "linux" }
+
+[tasks.app]
+description = "Run Setter with live reload"
+dir = "{{config_root}}/app"
+run = "{{config_root}}/scripts/in-env.sh dx serve --platform desktop"
+run_windows = "dx serve --platform desktop"
+
+[tasks.gallery]
+description = "Show every design-system component"
+dir = "{{config_root}}/app"
+run = "{{config_root}}/scripts/in-env.sh dx serve --platform desktop -- --gallery"
+run_windows = "dx serve --platform desktop -- --gallery"
+
+[tasks.build]
+description = "Build the app (debug)"
+dir = "{{config_root}}/app"
+run = "{{config_root}}/scripts/in-env.sh dx build --platform desktop"
+run_windows = "dx build --platform desktop"
+
+[tasks.bundle]
+description = "Build an installer for this OS (.msi/.exe, .app/.dmg, .deb/.AppImage)"
+dir = "{{config_root}}/app"
+run = "{{config_root}}/scripts/in-env.sh dx bundle --platform desktop --release"
+run_windows = "dx bundle --platform desktop --release"
+
+[tasks.test]
+description = "Run every test"
+run = "{{config_root}}/scripts/in-env.sh cargo test --workspace"
+run_windows = "cargo test --workspace"
+
+[tasks.lint]
+description = "Formatting and clippy, warnings as errors"
+run = [
+  "cargo fmt --all --check",
+  "{{config_root}}/scripts/in-env.sh cargo clippy --workspace --all-targets -- -D warnings",
+]
+run_windows = ["cargo fmt --all --check", "cargo clippy --workspace --all-targets -- -D warnings"]

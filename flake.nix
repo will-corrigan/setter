@@ -1,5 +1,5 @@
 {
-  description = "Setter — cryptic crossword setter (Rust + Dioxus desktop)";
+  description = "Setter: the webview libraries for building on NixOS (Rust and dx come from mise.toml)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -33,14 +33,10 @@
       in
       {
         devShells.default = pkgs.mkShell {
+          # Rust and dx come from mise (mise.toml) on every OS; this shell only
+          # adds what NixOS can't find system-wide, plus a Python for scripts/.
           nativeBuildInputs = with pkgs; [
             pkg-config
-            rustc
-            cargo
-            clippy
-            rustfmt
-            rust-analyzer
-            dioxus-cli
             clang
             mold
             python3
@@ -53,7 +49,6 @@
             export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
             # WebKitGTK's DMA-BUF renderer is flaky under WSLg / some GPUs
             export WEBKIT_DISABLE_DMABUF_RENDERER=1
-            export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath libs}:/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
             # gcc's collect2 hits "Argument list too long" with this shell's huge NIX_CFLAGS_COMPILE
             export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang
