@@ -1,8 +1,6 @@
 //! Editing the grid: selection, typing, moving, placing and clearing answers,
 //! word splits. Pure functions over the puzzle, so they're easy to test.
 
-#![allow(dead_code)] // used by the Build grid page
-
 use xw_engine::fill::shape_for;
 use xw_engine::grid::{Dir, Grid, Light};
 use xw_engine::puzzle::Puzzle;

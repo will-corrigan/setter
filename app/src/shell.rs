@@ -2,6 +2,7 @@
 
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::answer_nav::AnswerNav;
+use crate::ds::crossword_grid::GridKey;
 use crate::ds::empty_state::EmptyState;
 use crate::ds::note::Note;
 use crate::ds::notice::Notice;
@@ -9,8 +10,9 @@ use crate::ds::segmented::Segmented;
 use crate::ds::top_bar::TopBar as Bar;
 use crate::files;
 use crate::pages::about::About;
+use crate::pages::build_grid::{self, BuildGrid};
 use crate::pages::write_clues::WriteClues;
-use crate::state::{self, AppState, Mode, Shortcut, DATA};
+use crate::state::{self, AppState, Mode, Shortcut};
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -52,7 +54,7 @@ pub fn warning_line(warnings: &[String]) -> Option<String> {
 pub fn use_startup(state: AppState) {
     use_hook(|| {
         spawn(async move {
-            let warnings = tokio::task::spawn_blocking(|| DATA.warnings.clone());
+            let warnings = tokio::task::spawn_blocking(|| state::engine().warnings.clone());
             spawn(async move {
                 let mut notice = state.notice;
                 if let Some(line) = warnings.await.ok().and_then(|list| warning_line(&list)) {
@@ -64,6 +66,10 @@ pub fn use_startup(state: AppState) {
                 Some((puzzle, path)) => state.show(puzzle, Some(path), true),
                 None => fill_sample(state).await,
             }
+            // Have the grid index ready before Build grid first asks for it.
+            tokio::task::spawn_blocking(|| {
+                state::engine().fill();
+            });
             run_dev_script();
         });
     });
@@ -90,7 +96,7 @@ fn run_dev_script() {
 
 async fn fill_sample(mut state: AppState) {
     state.filling.set(true);
-    match tokio::task::spawn_blocking(|| files::sample_puzzle(&DATA.lex)).await {
+    match tokio::task::spawn_blocking(|| files::sample_puzzle(&state::engine().lex)).await {
         Ok(Ok(puzzle)) => state.show(puzzle, None, false),
         Ok(Err(why)) => state.notice.set(Some(why)),
         Err(_) => state
@@ -181,17 +187,36 @@ fn use_bank_loader(state: AppState) {
     });
 }
 
+/// Step to the answer before or after, on whichever page is showing.
+fn step_answer(state: AppState, delta: i32) {
+    if *state.mode.peek() == Mode::BuildGrid {
+        let key = if delta < 0 {
+            GridKey::PreviousAnswer
+        } else {
+            GridKey::NextAnswer
+        };
+        build_grid::key(state, key);
+    } else {
+        state.step(delta);
+    }
+}
+
 /// Alt+← / Alt+→ step through the answers and Ctrl+S saves, wherever the
-/// focus is.
+/// focus is. On Build grid, Ctrl+Z and Ctrl+Shift+Z undo and redo, and
+/// Ctrl+Space shows the words for the selected answer.
 fn use_shortcuts(state: AppState) {
     use_effect(move || {
         spawn(async move {
             let mut keys = document::eval(&state::shortcut_script());
-            while let Ok((key, alt, ctrl)) = keys.recv::<(String, bool, bool)>().await {
-                match state::shortcut(&key, alt, ctrl) {
-                    Some(Shortcut::PreviousAnswer) => state.step(-1),
-                    Some(Shortcut::NextAnswer) => state.step(1),
+            while let Ok((key, alt, ctrl, shift)) = keys.recv::<(String, bool, bool, bool)>().await
+            {
+                match state::shortcut(&key, alt, ctrl, shift) {
+                    Some(Shortcut::PreviousAnswer) => step_answer(state, -1),
+                    Some(Shortcut::NextAnswer) => step_answer(state, 1),
                     Some(Shortcut::Save) => save(state).await,
+                    Some(Shortcut::Undo) => build_grid::undo(state),
+                    Some(Shortcut::Redo) => build_grid::redo(state),
+                    Some(Shortcut::Words) => build_grid::toggle_words(state),
                     None => {}
                 }
             }
@@ -214,7 +239,8 @@ pub fn Shell() -> Element {
     use_shortcuts(state);
     use_theme(state);
     rsx! {
-        div { class: "shell",
+        // A click anywhere but in the words popover closes it.
+        div { class: "shell", onclick: move |_| build_grid::close_words(state),
             TopBar {}
             if let Some(message) = (state.notice)() {
                 Notice { message, on_dismiss: move |_| state.notice.set(None) }
@@ -224,7 +250,7 @@ pub fn Shell() -> Element {
             } else if !(state.ready)() {
                 EmptyState { message: "Filling a sample grid…" }
             } else if (state.mode)() == Mode::BuildGrid {
-                EmptyState { message: "Grid building comes next. Use New sample to get a filled grid." }
+                BuildGrid {}
             } else {
                 WriteClues {}
             }
@@ -237,6 +263,8 @@ pub fn Shell() -> Element {
 enum Replace {
     Open,
     NewSample,
+    /// Choose a grid for a new, empty puzzle.
+    NewPuzzle,
 }
 
 /// Is this button asking before it throws unsaved clues away?
@@ -269,6 +297,7 @@ fn TopBar() -> Element {
             match action {
                 Replace::Open => open(state).await,
                 Replace::NewSample => fill_sample(state).await,
+                Replace::NewPuzzle => state.build.picker_open.set(true),
             }
         });
     };
@@ -282,11 +311,20 @@ fn TopBar() -> Element {
     };
 
     let ready = (state.ready)();
-    let answer = (state.answer)().filter(|_| ready);
+    let building = (state.mode)() == Mode::BuildGrid;
+    // A fill is running: the puzzle can't be changed or replaced until it ends.
+    let working = (state.build.working)();
+    let answer = (state.answer)().filter(|_| ready && !building);
     let (clued, total) = (state.clued)();
+    let (filled, _) = (state.filled)();
+    let (can_undo, can_redo) = {
+        let history = state.build.history.read();
+        (history.can_undo(), history.can_redo())
+    };
     let theme = state.settings.read().theme;
     let (open_style, open_label) = replace_button(Replace::Open, "Open");
     let (sample_style, sample_label) = replace_button(Replace::NewSample, "New sample");
+    let (new_style, new_label) = replace_button(Replace::NewPuzzle, "New puzzle");
     rsx! {
         Bar {
             brand: "Setter",
@@ -295,7 +333,16 @@ fn TopBar() -> Element {
                 label: "Mode",
                 options: Mode::ALL.map(|m| m.label().to_string()).to_vec(),
                 selected: (state.mode)().index(),
-                on_change: move |i| state.mode.set(Mode::from_index(i)),
+                on_change: move |i| state.set_mode(Mode::from_index(i)),
+            }
+            if building {
+                Button {
+                    variant: new_style,
+                    size: ButtonSize::Sm,
+                    disabled: !ready || working,
+                    onclick: move |_| replace(Replace::NewPuzzle),
+                    "{new_label}"
+                }
             }
             if let Some(answer) = answer {
                 AnswerNav {
@@ -306,13 +353,40 @@ fn TopBar() -> Element {
             }
             },
             end: rsx! {
-            if ready && total > 0 {
+            if building {
+                if ready && total > 0 {
+                    Note { text: "{filled} of {total} filled" }
+                }
+                Button {
+                    variant: ButtonVariant::Primary,
+                    size: ButtonSize::Sm,
+                    disabled: !ready || working || filled == total,
+                    onclick: move |_| async move { build_grid::fill_rest(state).await },
+                    if working { "Filling…" } else { "Fill the rest" }
+                }
+                Button {
+                    variant: ButtonVariant::Ghost,
+                    size: ButtonSize::Sm,
+                    disabled: !ready || working || !can_undo,
+                    title: "Undo (Ctrl+Z)",
+                    onclick: move |_| build_grid::undo(state),
+                    "Undo"
+                }
+                Button {
+                    variant: ButtonVariant::Ghost,
+                    size: ButtonSize::Sm,
+                    disabled: !ready || working || !can_redo,
+                    title: "Redo (Ctrl+Shift+Z)",
+                    onclick: move |_| build_grid::redo(state),
+                    "Redo"
+                }
+            } else if ready && total > 0 {
                 Note { text: "{clued} of {total} clued" }
             }
             Button {
                 variant: open_style,
                 size: ButtonSize::Sm,
-                disabled: !ready,
+                disabled: !ready || working,
                 onclick: move |_| replace(Replace::Open),
                 "{open_label}"
             }
@@ -324,12 +398,14 @@ fn TopBar() -> Element {
                 onclick: move |_| async move { save(state).await },
                 "Save"
             }
-            Button {
-                variant: sample_style,
-                size: ButtonSize::Sm,
-                disabled: !ready,
-                onclick: move |_| replace(Replace::NewSample),
-                "{sample_label}"
+            if !building {
+                Button {
+                    variant: sample_style,
+                    size: ButtonSize::Sm,
+                    disabled: !ready || working,
+                    onclick: move |_| replace(Replace::NewSample),
+                    "{sample_label}"
+                }
             }
             Button {
                 variant: ButtonVariant::Ghost,
@@ -421,16 +497,106 @@ mod tests {
     }
 
     #[test]
-    fn build_grid_mode_is_one_line() {
+    fn build_grid_mode_shows_the_grid_page() {
         let html = shell(|mut state| {
             state.show(puzzle(), None, true);
             state.mode.set(Mode::BuildGrid);
         });
-        assert!(
-            html.contains("Grid building comes next. Use New sample to get a filled grid."),
-            "{html}"
-        );
+        for piece in ["build-grid", "xw-grid", "status-line", "clue-sheet"] {
+            assert!(
+                html.contains(&format!(r#"class="{piece}""#)),
+                "{piece}: {html}"
+            );
+        }
+        // Not the Write clues page.
         assert!(!html.contains("shell__body"), "{html}");
+        assert!(!html.contains("side-nav"), "{html}");
+    }
+
+    #[test]
+    fn build_grid_has_its_own_top_bar() {
+        let html = shell(|mut state| {
+            state.show(puzzle(), None, true);
+            state.mode.set(Mode::BuildGrid);
+        });
+        let order = [
+            "topbar__logo",
+            ">Build grid<",
+            ">Write clues<",
+            ">New puzzle<",
+            "topbar__spacer",
+            ">3 of 4 filled<",
+            ">Fill the rest<",
+            ">Undo<",
+            ">Redo<",
+            ">Open<",
+            ">Save<",
+            ">Theme: dark<",
+        ];
+        let mut from = 0;
+        for piece in order {
+            let at = html[from..]
+                .find(piece)
+                .unwrap_or_else(|| panic!("{piece} missing or out of order: {html}"));
+            from += at;
+        }
+        // The answer navigator and New sample belong to Write clues.
+        assert!(!html.contains("answer-nav"), "{html}");
+        assert!(!html.contains(">New sample<"), "{html}");
+        assert!(!html.contains("clued<"), "{html}");
+        // Shortcuts are named in tooltips only.
+        assert!(html.contains(r#"title="Undo (Ctrl+Z)""#), "{html}");
+        assert!(html.contains(r#"title="Redo (Ctrl+Shift+Z)""#), "{html}");
+        assert!(!html.contains(">Undo (Ctrl+Z)<"), "{html}");
+    }
+
+    /// The opening tag of the top-bar button with this label.
+    fn button(html: &str, label: &str) -> String {
+        let before = &html[..html
+            .find(&format!(">{label}<"))
+            .unwrap_or_else(|| panic!("{label}: {html}"))];
+        before[before.rfind("<button").unwrap()..].to_string()
+    }
+
+    #[test]
+    fn undo_and_redo_are_only_live_when_there_is_something_to_do() {
+        let fresh = shell(|mut state| {
+            state.show(puzzle(), None, true);
+            state.mode.set(Mode::BuildGrid);
+        });
+        assert!(button(&fresh, "Undo").contains("disabled"), "{fresh}");
+        assert!(button(&fresh, "Redo").contains("disabled"), "{fresh}");
+        assert!(
+            !button(&fresh, "Fill the rest").contains("disabled"),
+            "{fresh}"
+        );
+        let edited = shell(|mut state| {
+            state.show(puzzle(), None, true);
+            state.mode.set(Mode::BuildGrid);
+            state.edit(|p| crate::grid_edit::place(p, "0,0,a", "cot"));
+        });
+        assert!(!button(&edited, "Undo").contains("disabled"), "{edited}");
+        assert!(button(&edited, "Redo").contains("disabled"), "{edited}");
+        // Every square is full now: nothing left to fill.
+        assert!(
+            button(&edited, "Fill the rest").contains("disabled"),
+            "{edited}"
+        );
+    }
+
+    #[test]
+    fn while_a_fill_runs_the_grid_cannot_be_changed_or_replaced() {
+        let html = shell(|mut state| {
+            state.show(puzzle(), None, true);
+            state.mode.set(Mode::BuildGrid);
+            state.edit(|p| crate::grid_edit::clear_light(p, "2,0,a"));
+            state.build.working.set(true);
+        });
+        assert!(html.contains(">Filling…<"), "{html}");
+        for label in ["Filling…", "Undo", "New puzzle", "Open"] {
+            assert!(button(&html, label).contains("disabled"), "{label}: {html}");
+        }
+        assert!(!button(&html, "Save").contains("disabled"), "{html}");
     }
 
     #[test]

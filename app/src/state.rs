@@ -1,30 +1,91 @@
 //! Shared app state, and the pure logic behind the pages.
 
 use crate::answers::{self, Answer};
+use crate::ds::word_popover::WordEntry;
 use crate::files::{self, EngineData, Settings, Theme};
+use crate::grid_edit::{self, Cursor};
+use crate::grid_fill::{self, Snap};
+use crate::grid_view::Room;
+use crate::history::History;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
 use xw_engine::bank::{self, Column, DeviceKind, DeviceOption, DeviceView, Tile, Tone};
+use xw_engine::fill::{FillIndex, FillOptions, WordCount};
 use xw_engine::puzzle::Puzzle;
+use xw_engine::rules::GridStatus;
 
-/// Lexicon, lists and thesaurus, loaded once. Loading takes a moment, so the
-/// first touch must happen off the UI thread.
-pub static DATA: LazyLock<EngineData> = LazyLock::new(|| {
-    // Tests must not read or write the real config folder.
-    if cfg!(test) {
-        files::load_engine_data_from(&std::env::temp_dir().join("setter-test-data"))
-    } else {
-        files::load_engine_data()
+// ---------- engine data ----------
+
+/// The words that may go in a grid: the whole word list with its phrases,
+/// most popular first. Names are left out, as in the sample grid.
+pub const GRID_WORDS: FillOptions = FillOptions {
+    max_rank: u32::MAX,
+    allow_proper: false,
+    allow_phrases: true,
+};
+
+/// Lexicon, lists and thesaurus, plus the index used to fill grids.
+pub struct Engine {
+    data: EngineData,
+    fill: OnceLock<FillIndex>,
+}
+
+impl std::ops::Deref for Engine {
+    type Target = EngineData;
+
+    fn deref(&self) -> &EngineData {
+        &self.data
     }
-});
+}
+
+impl Engine {
+    fn load() -> Engine {
+        // Tests must not read or write the real config folder.
+        let data = if cfg!(test) {
+            files::load_engine_data_from(&std::env::temp_dir().join("setter-test-data"))
+        } else {
+            files::load_engine_data()
+        };
+        Engine {
+            data,
+            fill: OnceLock::new(),
+        }
+    }
+
+    /// The index for filling grids, built on first use. Slow enough to keep
+    /// off the UI thread.
+    pub fn fill(&self) -> &FillIndex {
+        self.fill
+            .get_or_init(|| FillIndex::build(&self.data.lex, GRID_WORDS))
+    }
+}
+
+static ENGINE: LazyLock<RwLock<Arc<Engine>>> =
+    LazyLock::new(|| RwLock::new(Arc::new(Engine::load())));
+
+/// The engine data in use. Loading takes a moment, so the first call must
+/// happen off the UI thread.
+pub fn engine() -> Arc<Engine> {
+    ENGINE
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+}
+
+/// Load the engine data again, after the user's own word list changed. Work
+/// already under way keeps the data it started with.
+pub fn reload_engine() {
+    let fresh = Arc::new(Engine::load());
+    *ENGINE.write().unwrap_or_else(PoisonError::into_inner) = fresh;
+}
 
 /// Every device's material for one answer pattern. Slow enough to keep off
 /// the UI thread.
 pub fn build_bank(pattern: &str) -> Vec<DeviceView> {
-    let data = &*DATA;
+    let data = engine();
     bank::build(
         xw_engine::Ctx::new(&data.lex, &data.abbr),
         &data.ind,
@@ -257,38 +318,56 @@ pub enum Shortcut {
     PreviousAnswer,
     NextAnswer,
     Save,
+    Undo,
+    Redo,
+    /// Open or close the words popover.
+    Words,
 }
 
-/// (key, Alt held, Ctrl held, action). The page's key listener and
-/// `shortcut` both read this table.
-pub const SHORTCUTS: [(&str, bool, bool, Shortcut); 3] = [
-    ("arrowleft", true, false, Shortcut::PreviousAnswer),
-    ("arrowright", true, false, Shortcut::NextAnswer),
-    ("s", false, true, Shortcut::Save),
+impl Shortcut {
+    /// Does it also work while typing in a text box? Undo and redo don't:
+    /// there, Ctrl+Z belongs to the text.
+    pub fn while_typing(self) -> bool {
+        !matches!(self, Shortcut::Undo | Shortcut::Redo)
+    }
+}
+
+/// (key, Alt held, Ctrl held, Shift held, action). The page's key listener
+/// and `shortcut` both read this table.
+pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 6] = [
+    ("arrowleft", true, false, false, Shortcut::PreviousAnswer),
+    ("arrowright", true, false, false, Shortcut::NextAnswer),
+    ("s", false, true, false, Shortcut::Save),
+    ("z", false, true, false, Shortcut::Undo),
+    ("z", false, true, true, Shortcut::Redo),
+    (" ", false, true, false, Shortcut::Words),
 ];
 
-pub fn shortcut(key: &str, alt: bool, ctrl: bool) -> Option<Shortcut> {
+pub fn shortcut(key: &str, alt: bool, ctrl: bool, shift: bool) -> Option<Shortcut> {
     let key = key.to_lowercase();
     SHORTCUTS
         .iter()
-        .find(|(k, a, c, _)| *k == key && *a == alt && *c == ctrl)
-        .map(|s| s.3)
+        .find(|(k, a, c, s, _)| *k == key && *a == alt && *c == ctrl && *s == shift)
+        .map(|s| s.4)
 }
 
 /// JavaScript that listens for the shortcut keys anywhere in the window,
-/// stops the webview's own handling of them, and sends `[key, alt, ctrl]`.
+/// stops the webview's own handling of them, and sends
+/// `[key, alt, ctrl, shift]`. Each combo ends with whether it also works
+/// while typing in a text box.
 pub fn shortcut_script() -> String {
     let combos: Vec<String> = SHORTCUTS
         .iter()
-        .map(|(k, a, c, _)| format!("[\"{k}\",{a},{c}]"))
+        .map(|(k, a, c, s, action)| format!("[\"{k}\",{a},{c},{s},{}]", action.while_typing()))
         .collect();
     format!(
         "const combos = [{}];\
          document.addEventListener('keydown', (e) => {{\
-           const key = e.key.toLowerCase(), alt = e.altKey, ctrl = e.ctrlKey || e.metaKey;\
-           if (combos.some(([k, a, c]) => k === key && a === alt && c === ctrl)) {{\
+           const key = e.key.toLowerCase(), alt = e.altKey, ctrl = e.ctrlKey || e.metaKey, shift = e.shiftKey;\
+           const typing = !!(e.target.closest && e.target.closest('input, textarea'));\
+           if (combos.some(([k, a, c, s, t]) => k === key && a === alt && c === ctrl && s === shift && (t || !typing))) {{\
              e.preventDefault();\
-             dioxus.send([key, alt, ctrl]);\
+             dioxus.send([key, alt, ctrl, shift]);\
            }}\
          }});\
          await new Promise(() => {{}});",
@@ -325,6 +404,41 @@ impl Shown {
     }
 }
 
+/// The words found for the popover, and the answer they were found for.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Found {
+    pub light: String,
+    pub pattern: String,
+    pub entries: Vec<WordEntry>,
+}
+
+/// What the Build grid page keeps between renders.
+#[derive(Clone, Copy, PartialEq)]
+pub struct BuildState {
+    /// The selected square, and the direction being filled.
+    pub cursor: Signal<Cursor>,
+    /// Grid changes that can be undone and redone.
+    pub history: Signal<History<Snap>>,
+    /// The words popover is showing.
+    pub words_open: Signal<bool>,
+    /// What is typed in the popover's search box.
+    pub query: Signal<String>,
+    /// The popover's word-count chip.
+    pub words: Signal<WordCount>,
+    /// Room for the popover, measured as it opens.
+    pub room: Signal<Room>,
+    /// The words that fit, once found.
+    pub found: Signal<Option<Found>>,
+    /// The template picker is showing.
+    pub picker_open: Signal<bool>,
+    /// The status under the grid, once worked out.
+    pub status: Signal<Option<GridStatus>>,
+    /// A fill is running; the grid waits for it.
+    pub working: Signal<bool>,
+    /// Goes up each time the word list is loaded again.
+    pub reloads: Signal<u32>,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub struct AppState {
     /// `None` while the first puzzle is being made.
@@ -350,6 +464,9 @@ pub struct AppState {
     pub answer: Memo<Option<Answer>>,
     /// (answers with a clue, all answers)
     pub clued: Memo<(usize, usize)>,
+    /// (answers with every square filled, all answers)
+    pub filled: Memo<(usize, usize)>,
+    pub build: BuildState,
 }
 
 /// Create the app state and share it with every component below.
@@ -374,8 +491,31 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
             .map(answers::clued_count)
             .unwrap_or_default()
     });
+    let filled = use_memo(move || {
+        puzzle
+            .read()
+            .as_ref()
+            .map(answers::filled_count)
+            .unwrap_or_default()
+    });
     let filling = use_signal(|| false);
     let ready = use_memo(move || puzzle.read().is_some() && !filling());
+    let build = BuildState {
+        cursor: use_signal(|| Cursor {
+            cell: 0,
+            dir: xw_engine::grid::Dir::Across,
+        }),
+        history: use_signal(|| History::new(grid_fill::UNDO_STEPS)),
+        words_open: use_signal(|| false),
+        query: use_signal(String::new),
+        words: use_signal(WordCount::default),
+        room: use_signal(Room::default),
+        found: use_signal(|| None),
+        picker_open: use_signal(|| false),
+        status: use_signal(|| None),
+        working: use_signal(|| false),
+        reloads: use_signal(|| 0),
+    };
     let state = AppState {
         puzzle,
         path: use_signal(|| None),
@@ -391,6 +531,8 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         ready,
         answer,
         clued,
+        filled,
+        build,
     };
     use_context_provider(|| state);
     state
@@ -406,9 +548,78 @@ impl AppState {
             .unwrap_or_default();
         self.picks.write().clear();
         self.selection.set(Selection::at(first));
+        self.build.cursor.set(grid_fill::start_cursor(&puzzle.grid));
+        self.build.history.set(History::new(grid_fill::UNDO_STEPS));
+        self.build.words_open.set(false);
+        self.build.picker_open.set(false);
+        self.build.query.set(String::new());
+        self.build.found.set(None);
+        self.build.status.set(None);
         self.puzzle.set(Some(puzzle));
         self.path.set(path);
         self.dirty.set(!saved);
+    }
+
+    /// Switch page, staying on the same answer.
+    pub fn set_mode(mut self, mode: Mode) {
+        if let Some(p) = self.puzzle.peek().as_ref() {
+            let cursor = *self.build.cursor.peek();
+            let on_grid = grid_edit::current_light(&p.grid, cursor).map(|l| l.id);
+            let chosen = self.selection.peek().light.clone();
+            if on_grid.as_deref() != Some(chosen.as_str()) {
+                match (mode, on_grid) {
+                    (Mode::WriteClues, Some(light)) => self.selection.set(Selection::at(light)),
+                    (Mode::BuildGrid, _) => {
+                        if let Some(c) = grid_fill::cursor_on(&p.grid, &chosen) {
+                            self.build.cursor.set(c);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.build.words_open.set(false);
+        self.mode.set(mode);
+    }
+
+    /// Change the grid. What it was before goes on the undo stack and the
+    /// puzzle counts as unsaved, unless the change left everything as it was.
+    pub fn edit<R>(mut self, change: impl FnOnce(&mut Puzzle) -> R) -> Option<R> {
+        let cursor = *self.build.cursor.peek();
+        let mut puzzle = self.puzzle.peek().clone()?;
+        let before = grid_fill::snapshot(&puzzle, cursor);
+        let result = change(&mut puzzle);
+        if grid_fill::snapshot(&puzzle, cursor) != before {
+            self.build.history.write().push(before);
+            self.puzzle.set(Some(puzzle));
+            if !*self.dirty.peek() {
+                self.dirty.set(true);
+            }
+        }
+        Some(result)
+    }
+
+    /// Take back the last grid change. Clue text is left alone.
+    pub fn undo(self) {
+        self.travel(History::undo);
+    }
+
+    pub fn redo(self) {
+        self.travel(History::redo);
+    }
+
+    fn travel(mut self, step: fn(&mut History<Snap>, Snap) -> Option<Snap>) {
+        let Some(mut puzzle) = self.puzzle.peek().clone() else {
+            return;
+        };
+        let now = grid_fill::snapshot(&puzzle, *self.build.cursor.peek());
+        let Some(snap) = step(&mut self.build.history.write(), now) else {
+            return;
+        };
+        grid_fill::restore(&mut puzzle, &snap);
+        self.build.cursor.set(snap.cursor);
+        self.puzzle.set(Some(puzzle));
+        self.dirty.set(true);
     }
 
     pub fn step(mut self, delta: i32) {
@@ -733,27 +944,72 @@ mod tests {
     #[test]
     fn shortcuts_need_their_modifier() {
         assert_eq!(
-            shortcut("ArrowLeft", true, false),
+            shortcut("ArrowLeft", true, false, false),
             Some(Shortcut::PreviousAnswer)
         );
         assert_eq!(
-            shortcut("ArrowRight", true, false),
+            shortcut("ArrowRight", true, false, false),
             Some(Shortcut::NextAnswer)
         );
-        assert_eq!(shortcut("s", false, true), Some(Shortcut::Save));
-        assert_eq!(shortcut("S", false, true), Some(Shortcut::Save));
-        assert_eq!(shortcut("ArrowRight", false, false), None);
-        assert_eq!(shortcut("s", false, false), None);
-        assert_eq!(shortcut("s", true, true), None);
+        assert_eq!(shortcut("s", false, true, false), Some(Shortcut::Save));
+        assert_eq!(shortcut("S", false, true, false), Some(Shortcut::Save));
+        assert_eq!(shortcut("ArrowRight", false, false, false), None);
+        assert_eq!(shortcut("s", false, false, false), None);
+        assert_eq!(shortcut("s", true, true, false), None);
+        assert_eq!(shortcut("s", false, true, true), None);
+    }
+
+    #[test]
+    fn undo_redo_and_the_words_popover_have_shortcuts() {
+        assert_eq!(shortcut("z", false, true, false), Some(Shortcut::Undo));
+        // Shift makes the key a capital.
+        assert_eq!(shortcut("Z", false, true, true), Some(Shortcut::Redo));
+        assert_eq!(shortcut(" ", false, true, false), Some(Shortcut::Words));
+        assert_eq!(shortcut("z", false, false, false), None);
+        assert_eq!(shortcut(" ", false, false, false), None);
+    }
+
+    #[test]
+    fn undo_and_redo_leave_text_boxes_alone() {
+        assert!(!Shortcut::Undo.while_typing());
+        assert!(!Shortcut::Redo.while_typing());
+        for everywhere in [
+            Shortcut::Save,
+            Shortcut::Words,
+            Shortcut::PreviousAnswer,
+            Shortcut::NextAnswer,
+        ] {
+            assert!(everywhere.while_typing(), "{everywhere:?}");
+        }
     }
 
     #[test]
     fn shortcut_script_listens_for_every_shortcut() {
         let js = shortcut_script();
-        for (key, alt, ctrl, _) in SHORTCUTS {
-            assert!(js.contains(&format!("[\"{key}\",{alt},{ctrl}]")), "{js}");
+        for (key, alt, ctrl, shift, action) in SHORTCUTS {
+            let typing = action.while_typing();
+            assert!(
+                js.contains(&format!("[\"{key}\",{alt},{ctrl},{shift},{typing}]")),
+                "{js}"
+            );
         }
         assert!(js.contains("preventDefault") && js.contains("dioxus.send"));
+        assert!(js.contains("input, textarea"), "{js}");
+    }
+
+    #[test]
+    fn the_engine_can_be_loaded_again() {
+        let before = engine();
+        assert!(before.lex.contains("orchestra"));
+        // The grid index covers the whole list, phrases included.
+        assert_eq!(before.fill().count(b"orch?stra"), 1);
+        assert!(before.fill().count(b"cart?orse") >= 1);
+        reload_engine();
+        let after = engine();
+        assert!(!Arc::ptr_eq(&before, &after));
+        assert!(after.lex.contains("orchestra"));
+        // Work that started with the old data can finish with it.
+        assert!(before.lex.contains("cat"));
     }
 
     #[test]
@@ -771,6 +1027,162 @@ mod tests {
         assert_eq!(Mode::ALL.map(Mode::label), ["Build grid", "Write clues"]);
         assert_eq!(Mode::from_index(Mode::BuildGrid.index()), Mode::BuildGrid);
         assert_eq!(Mode::from_index(Mode::WriteClues.index()), Mode::WriteClues);
+    }
+
+    /// Run `act` on a fresh app state showing `puzzle()`, then report with `say`.
+    fn after(
+        act: impl FnOnce(AppState) + 'static,
+        say: impl Fn(AppState) -> String + 'static,
+    ) -> String {
+        crate::ds::test_render(move || {
+            let state = use_app_state(Settings::default);
+            use_hook(|| {
+                state.show(puzzle(), None, true);
+                act(state);
+            });
+            let text = say(state);
+            rsx! { "{text}" }
+        })
+    }
+
+    fn first_row(state: AppState) -> String {
+        let puzzle = state.puzzle.read();
+        let p = puzzle.as_ref().unwrap();
+        p.grid.pattern(&p.grid.lights()[0])
+    }
+
+    fn can(state: AppState) -> String {
+        let history = state.build.history.read();
+        format!("undo={} redo={}", history.can_undo(), history.can_redo())
+    }
+
+    #[test]
+    fn a_grid_edit_can_be_undone_and_marks_the_puzzle_unsaved() {
+        let edited = after(
+            |state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+            },
+            |state| format!("{} {} {}", first_row(state), (state.dirty)(), can(state)),
+        );
+        assert_eq!(edited, "cot true undo=true redo=false");
+    }
+
+    #[test]
+    fn an_edit_that_changes_nothing_is_not_a_step() {
+        let same = after(
+            |state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cat"));
+            },
+            |state| format!("{} {}", (state.dirty)(), can(state)),
+        );
+        assert_eq!(same, "false undo=false redo=false");
+    }
+
+    #[test]
+    fn undo_and_redo_move_the_grid_but_never_the_clue_text() {
+        let undone = after(
+            |mut state| {
+                state.build.cursor.set(Cursor {
+                    cell: 2,
+                    dir: xw_engine::grid::Dir::Down,
+                });
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+                state.build.cursor.set(Cursor {
+                    cell: 6,
+                    dir: xw_engine::grid::Dir::Across,
+                });
+                state.set_clue_text("Bed".into());
+                state.undo();
+            },
+            |state| {
+                format!(
+                    "{} {} {} cell={}",
+                    first_row(state),
+                    state.clue_text(),
+                    can(state),
+                    (state.build.cursor)().cell
+                )
+            },
+        );
+        assert_eq!(undone, "cat Bed undo=false redo=true cell=2");
+        let redone = after(
+            |state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+                state.set_clue_text("Bed".into());
+                state.undo();
+                state.redo();
+            },
+            |state| format!("{} {} {}", first_row(state), state.clue_text(), can(state)),
+        );
+        assert_eq!(redone, "cot Bed undo=true redo=false");
+    }
+
+    #[test]
+    fn showing_another_puzzle_forgets_the_old_ones_history() {
+        let fresh = after(
+            |mut state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+                state.build.words_open.set(true);
+                state.build.picker_open.set(true);
+                state.show(puzzle(), None, true);
+            },
+            |state| {
+                format!(
+                    "{} words={} picker={}",
+                    can(state),
+                    (state.build.words_open)(),
+                    (state.build.picker_open)()
+                )
+            },
+        );
+        assert_eq!(fresh, "undo=false redo=false words=false picker=false");
+    }
+
+    #[test]
+    fn switching_page_stays_on_the_same_answer() {
+        let to_clues = after(
+            |mut state| {
+                // 2 down, by its last square.
+                state.build.cursor.set(Cursor {
+                    cell: 8,
+                    dir: xw_engine::grid::Dir::Down,
+                });
+                state.build.words_open.set(true);
+                state.set_mode(Mode::WriteClues);
+            },
+            |state| {
+                format!(
+                    "{:?} {} words={}",
+                    (state.mode)(),
+                    state.selection.read().light,
+                    (state.build.words_open)()
+                )
+            },
+        );
+        assert_eq!(to_clues, "WriteClues 0,2,d words=false");
+        let to_grid = after(
+            |mut state| {
+                state.selection.set(Selection::at("2,0,a"));
+                state.set_mode(Mode::BuildGrid);
+            },
+            |state| {
+                let c = (state.build.cursor)();
+                format!("{:?} {} {:?}", (state.mode)(), c.cell, c.dir)
+            },
+        );
+        assert_eq!(to_grid, "BuildGrid 6 Across");
+    }
+
+    #[test]
+    fn the_filled_count_follows_the_grid() {
+        let counted = after(
+            |state| {
+                state.edit(|p| grid_edit::clear_light(p, "0,0,a"));
+            },
+            |state| format!("{:?}", (state.filled)()),
+        );
+        // CAT loses its A (C and T belong to full down answers): 3 of 4 left.
+        assert_eq!(counted, "(3, 4)");
     }
 
     #[test]

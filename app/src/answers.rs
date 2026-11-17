@@ -66,6 +66,16 @@ pub fn clued_count(p: &Puzzle) -> (usize, usize) {
     (clued, lights.len())
 }
 
+/// (lights with every square filled, all lights)
+pub fn filled_count(p: &Puzzle) -> (usize, usize) {
+    let lights = p.grid.lights();
+    let filled = lights
+        .iter()
+        .filter(|l| l.cells.iter().all(|&c| p.grid.cells[c].letter.is_some()))
+        .count();
+    (filled, lights.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +103,16 @@ mod tests {
         let list = answers(&puzzle());
         assert_eq!(step(&list, "0,0,a", -1), Some("0,2,d".to_string()));
         assert_eq!(step(&list, "0,2,d", 1), Some("0,0,a".to_string()));
+    }
+
+    #[test]
+    fn counts_filled_lights() {
+        assert_eq!(filled_count(&puzzle()), (4, 4));
+        let mut p = puzzle();
+        p.grid = Grid::from_rows(&["c.t", "a#o", "b.."]);
+        // Only 1 down (CAB) is complete.
+        assert_eq!(filled_count(&p), (1, 4));
+        assert_eq!(filled_count(&Puzzle::new(0, 0)), (0, 0));
     }
 
     #[test]

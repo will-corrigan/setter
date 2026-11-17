@@ -1,7 +1,5 @@
 //! Undo/redo for whole-puzzle snapshots.
 
-#![allow(dead_code)] // used by the Build grid page
-
 /// Snapshots to undo to, and to redo to, capped in size.
 pub struct History<T> {
     undo: Vec<T>,

@@ -1,0 +1,1751 @@
+{
+ "format": 1,
+ "title": "Sample puzzle",
+ "author": "",
+ "preamble": "",
+ "notes": "",
+ "symmetry": "rotational",
+ "grid": {
+  "width": 15,
+  "height": 15,
+  "cells": [
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "A",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "P",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "A",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "H",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "C",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "F",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "B",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "Y",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "F",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "H",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "L",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "L",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "M",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "C",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "M",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "Y",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "M",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "A",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "L",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "U",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "C",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "W",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "H",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "P",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "C",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "W",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "G",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "L",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "V",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "P",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "A",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "Y",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "G",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "A",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "L",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "Y",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "A",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "M",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "A",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "G",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "W",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "U",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "T",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "U",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "H",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "R",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "L",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "K",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "M",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "D",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "X",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "C",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "I",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "V",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "E",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": true,
+    "letter": null,
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "O",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "N",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "G",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   },
+   {
+    "block": false,
+    "letter": "S",
+    "bar_right": false,
+    "bar_bottom": false,
+    "circled": false
+   }
+  ]
+ },
+ "clues": {
+  "0,0,a": {
+   "text": "Reset badly for some woodland",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,0,d": {
+   "text": "Bill with the French put forward",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,2,d": {
+   "text": "Gloomy yet strangely about word origins",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,4,d": {
+   "text": "Grave is ours, with energy, moved",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,6,a": {
+   "text": "Carry across with wine",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,6,d": {
+   "text": "Article found in bathe",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,8,d": {
+   "text": "Plus, part of hand",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,10,d": {
+   "text": "Plots me chess messily",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "0,12,d": {
+   "text": "Frequently of ten?",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "2,10,a": {
+   "text": "Spicy railway, where to stay",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "4,0,a": {
+   "text": "Money co. sorted out thrift",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "4,6,d": {
+   "text": "Produce editor gave way",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "4,8,a": {
+   "text": "Maddens wildly with claims",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "6,0,a": {
+   "text": "Which person\u2019s in show houses?",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "6,0,d": {
+   "text": "Earth and broad, global",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "6,4,a": {
+   "text": "Kind of spies keeping European Community",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "6,12,a": {
+   "text": "Number heard as well",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "6,12,d": {
+   "text": "Custom: jazz style, sex appeal, particle",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "8,0,a": {
+   "text": "Fish right, a yard",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "8,4,a": {
+   "text": "Avoid Royal Society\u2019s tricksters",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "8,4,d": {
+   "text": "Units of heat: greed in south-east, transformed",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "8,10,d": {
+   "text": "Methods: my sets, son, rearranged",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "8,12,a": {
+   "text": "Exist in a real sense, partly",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "10,0,a": {
+   "text": "Barrier old and hurt",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "10,2,d": {
+   "text": "Greek letter, thus written, for tunes",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "10,8,a": {
+   "text": "Noises and son broken up in sitting",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "10,14,d": {
+   "text": "Dense, oddly, requires",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "12,0,a": {
+   "text": "Problem: I, son, take to court",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "12,6,d": {
+   "text": "Glide in brisk ice",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "12,8,d": {
+   "text": "Single part of phone",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "14,0,a": {
+   "text": "Sex vices and ecstasy rampant? Too much",
+   "enumeration": "",
+   "annotation": ""
+  },
+  "14,10,a": {
+   "text": "Airs: boy, good and small",
+   "enumeration": "",
+   "annotation": ""
+  }
+ }
+}
