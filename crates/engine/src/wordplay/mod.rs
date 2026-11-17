@@ -10,6 +10,7 @@ pub mod hidden;
 pub mod homophone;
 pub mod reversal;
 pub mod shift;
+pub mod spoonerism;
 pub mod substitution;
 
 use crate::lexicon::{Lexicon, WordId};
