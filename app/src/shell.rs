@@ -8,6 +8,7 @@ use crate::ds::notice::Notice;
 use crate::ds::segmented::Segmented;
 use crate::ds::top_bar::TopBar as Bar;
 use crate::files;
+use crate::pages::about::About;
 use crate::pages::write_clues::WriteClues;
 use crate::state::{self, AppState, Mode, Shortcut, DATA};
 use dioxus::prelude::*;
@@ -218,7 +219,9 @@ pub fn Shell() -> Element {
             if let Some(message) = (state.notice)() {
                 Notice { message, on_dismiss: move |_| state.notice.set(None) }
             }
-            if !(state.ready)() {
+            if (state.credits)() {
+                About {}
+            } else if !(state.ready)() {
                 EmptyState { message: "Filling a sample grid…" }
             } else if (state.mode)() == Mode::BuildGrid {
                 EmptyState { message: "Grid building comes next. Use New sample to get a filled grid." }
@@ -337,6 +340,12 @@ fn TopBar() -> Element {
                     files::save_settings(&state.settings.peek());
                 },
                 "{state::theme_label(theme)}"
+            }
+            Button {
+                variant: ButtonVariant::Ghost,
+                size: ButtonSize::Sm,
+                onclick: move |_| state.credits.toggle(),
+                if (state.credits)() { "Close credits" } else { "Credits" }
             }
             },
         }

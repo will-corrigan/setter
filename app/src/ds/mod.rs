@@ -9,6 +9,7 @@ mod discipline;
 pub mod empty_state;
 pub mod note;
 pub mod notice;
+pub mod prose;
 pub mod reads_as;
 pub mod segmented;
 pub mod side_nav;

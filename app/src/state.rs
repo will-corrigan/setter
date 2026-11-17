@@ -342,6 +342,8 @@ pub struct AppState {
     pub notice: Signal<Option<String>>,
     /// A sample grid is being filled.
     pub filling: Signal<bool>,
+    /// The credits are showing instead of the page.
+    pub credits: Signal<bool>,
     /// There is a puzzle to show, and no new one on its way.
     pub ready: Memo<bool>,
     /// The answer on screen.
@@ -385,6 +387,7 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         settings: use_signal(settings),
         notice: use_signal(|| None),
         filling,
+        credits: use_signal(|| false),
         ready,
         answer,
         clued,

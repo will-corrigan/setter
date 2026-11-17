@@ -8,6 +8,7 @@ use crate::ds::clue_field::ClueField;
 use crate::ds::empty_state::EmptyState;
 use crate::ds::note::Note;
 use crate::ds::notice::Notice;
+use crate::ds::prose::Prose;
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
 use crate::ds::side_nav::{NavItem, SideNav};
@@ -195,6 +196,9 @@ fn Showcase(scope: &'static str) -> Element {
                     }
                 }
             }
+            Section { title: "Prose",
+                Prose { title: "Credits", text: "Open English WordNet 2025, CC BY 4.0.\nMoby Thesaurus II, public domain." }
+            }
             Section { title: "Empty state",
                 EmptyState { message: "This answer has empty squares." }
             }
@@ -224,6 +228,7 @@ mod tests {
             "dx-button",
             "topbar__logo",
             "class=\"note\"",
+            "prose__body",
         ] {
             assert!(html.contains(class), "missing {class}");
         }

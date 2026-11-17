@@ -85,7 +85,7 @@ It contains:
 
 ## Data and credits
 
-Built-in data and its licences are listed in [`data/NOTICE.md`](data/NOTICE.md):
+Built-in data and its licences are listed in [`data/NOTICE.md`](data/NOTICE.md), which is also shown in the app under **Credits**:
 
 - The Lufz lexicon (from Exet; UKACD18 and CMUdict).
 - Open English WordNet 2025 (CC BY 4.0).
