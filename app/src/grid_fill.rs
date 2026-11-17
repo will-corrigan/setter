@@ -810,7 +810,7 @@ mod tests {
 
     #[test]
     fn an_added_word_counts_as_a_word_everywhere() {
-        let dir = std::env::temp_dir().join(format!("setter-test-myword-{}", std::process::id()));
+        let dir = crate::files::scratch_dir(&format!("myword-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         files::ensure_user_files_in(&dir);
         let mut p = puzzle(&["zobrist"]);

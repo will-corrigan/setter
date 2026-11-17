@@ -1,8 +1,8 @@
 // Dev script for a debug build of Setter: drives the Build grid page (and the
 // Write clues word bank) for screenshots.
 //
-//   (echo 'const SCENE = "phrase";'; cat scripts/dev/build-grid.js) > /tmp/scene.js
-//   SETTER_DEV_SCRIPT=/tmp/scene.js target/dx/setter/debug/linux/app/setter
+//   (echo 'const SCENE = "phrase";'; cat scripts/dev/build-grid.js) > .scratch/scene.js
+//   SETTER_DEV_SCRIPT=.scratch/scene.js nix develop --command target/dx/setter/debug/linux/app/setter
 //
 // Synthetic input can't be sent to WSLg windows, so this uses DOM events
 // instead. The app prints "dev script finished" to stderr when it is done.

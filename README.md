@@ -81,7 +81,10 @@ doesn't reach windows:
 - `SETTER_GALLERY_SCROLL=<px>`: scroll the gallery.
 - `SETTER_DEV_SCRIPT=<file.js>`: run a script in the window (debug builds only). See
   `scripts/dev/`.
-- `scripts/winshot.ps1`: capture a window from WSL via Windows PowerShell.
+- `scripts/winshot.ps1`: capture a window from WSL via Windows PowerShell, e.g.
+  `-Title Setter -Out "$(wslpath -w .scratch)\shot.png"`.
+
+Scratch files stay in the repo. Screenshots and dev scripts go in `.scratch/`, which git ignores. Tests write under `target/scratch`.
 
 ## Building for Windows
 

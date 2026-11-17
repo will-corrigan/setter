@@ -7,3 +7,4 @@ reports/
 /app/target
 /target/dx
 /app/dist
+.scratch/

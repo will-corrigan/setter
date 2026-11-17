@@ -101,7 +101,7 @@ mod tests {
     use xw_engine::puzzle::Puzzle;
 
     fn dir(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("setter-autosave-{name}-{}", std::process::id()));
+        let d = crate::files::scratch_dir(&format!("autosave-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d

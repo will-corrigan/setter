@@ -38,7 +38,7 @@ use xw_engine::templates::TEMPLATES;
 
 /// Real engine output for ORCHESTRA, so the gallery shows true data shapes.
 static SAMPLE: LazyLock<Vec<DeviceView>> = LazyLock::new(|| {
-    let data = crate::files::load_engine_data_from(&std::env::temp_dir().join("setter-gallery"));
+    let data = crate::files::load_engine_data_from(&crate::files::scratch_dir("gallery"));
     bank::build(
         xw_engine::Ctx::new(&data.lex, &data.abbr),
         &data.ind,
