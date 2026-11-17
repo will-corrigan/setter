@@ -56,5 +56,5 @@ filetypes … that are popular."
 ## Out of scope tonight
 
 - Live "play together" sessions or hosting.
-- PDF layout (Exolve's page has Print).
+- PDF layout (the web page has Print).
 - Recent-files list.
