@@ -2,6 +2,7 @@
 
 use crate::ds::clue_field::ClueField;
 use crate::ds::empty_state::EmptyState;
+use crate::ds::note::Note;
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
 use crate::ds::side_nav::{NavItem, SideNav};
@@ -95,7 +96,7 @@ fn Head() -> Element {
         div { class: "clue-head",
             Tiles { tiles }
             if answer.pattern.contains('?') {
-                span { class: "clue-head__note", "This answer has empty squares." }
+                Note { text: "This answer has empty squares." }
             }
             if let Some(device) = device.filter(|_| !labels.is_empty()) {
                 Segmented {

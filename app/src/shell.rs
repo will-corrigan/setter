@@ -3,8 +3,10 @@
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::answer_nav::AnswerNav;
 use crate::ds::empty_state::EmptyState;
+use crate::ds::note::Note;
 use crate::ds::notice::Notice;
 use crate::ds::segmented::Segmented;
+use crate::ds::top_bar::TopBar as Bar;
 use crate::files;
 use crate::pages::write_clues::WriteClues;
 use crate::state::{self, AppState, Mode, Shortcut, DATA};
@@ -283,8 +285,9 @@ fn TopBar() -> Element {
     let (open_style, open_label) = replace_button(Replace::Open, "Open");
     let (sample_style, sample_label) = replace_button(Replace::NewSample, "New sample");
     rsx! {
-        header { class: "topbar",
-            span { class: "topbar__logo", "Setter" }
+        Bar {
+            brand: "Setter",
+            start: rsx! {
             Segmented {
                 label: "Mode",
                 options: Mode::ALL.map(|m| m.label().to_string()).to_vec(),
@@ -298,9 +301,10 @@ fn TopBar() -> Element {
                     on_step: move |delta| state.step(delta),
                 }
             }
-            span { class: "topbar__spacer" }
+            },
+            end: rsx! {
             if ready && total > 0 {
-                span { class: "topbar__meta", "{clued} of {total} clued" }
+                Note { text: "{clued} of {total} clued" }
             }
             Button {
                 variant: open_style,
@@ -334,6 +338,7 @@ fn TopBar() -> Element {
                 },
                 "{state::theme_label(theme)}"
             }
+            },
         }
     }
 }

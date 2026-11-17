@@ -6,11 +6,13 @@ use crate::ds::answer_nav::AnswerNav;
 use crate::ds::chip::Chip;
 use crate::ds::clue_field::ClueField;
 use crate::ds::empty_state::EmptyState;
+use crate::ds::note::Note;
 use crate::ds::notice::Notice;
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
 use crate::ds::side_nav::{NavItem, SideNav};
 use crate::ds::tiles::Tiles;
+use crate::ds::top_bar::TopBar;
 use crate::ds::word_column::WordColumn;
 use crate::highlight::{checks, Checks};
 use dioxus::prelude::*;
@@ -108,6 +110,13 @@ fn Showcase(scope: &'static str) -> Element {
         .collect();
     rsx! {
         div { class: "gallery__theme", "data-theme-scope": scope,
+            Section { title: "Top bar",
+                TopBar {
+                    brand: "Setter",
+                    start: rsx! { span { "…" } },
+                    end: rsx! { Note { text: "11 of 28 clued" } },
+                }
+            }
             Section { title: "Buttons ({scope})",
                 div { class: "gallery__row",
                     Button { variant: ButtonVariant::Primary, "Save" }
@@ -213,6 +222,8 @@ mod tests {
             "notice",
             "dx-toggle",
             "dx-button",
+            "topbar__logo",
+            "class=\"note\"",
         ] {
             assert!(html.contains(class), "missing {class}");
         }

@@ -5,12 +5,15 @@
 pub mod answer_nav;
 pub mod chip;
 pub mod clue_field;
+mod discipline;
 pub mod empty_state;
+pub mod note;
 pub mod notice;
 pub mod reads_as;
 pub mod segmented;
 pub mod side_nav;
 pub mod tiles;
+pub mod top_bar;
 pub mod word_column;
 
 /// Render a component tree to HTML inside a real VirtualDom (handlers and
