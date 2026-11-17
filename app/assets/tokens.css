@@ -104,6 +104,7 @@
   /* ---------- type ---------- */
   --font-sans: "Instrument Sans", system-ui, sans-serif;
   --font-serif: "Newsreader", Georgia, serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   --text-2xs: 10.5px;  /* group labels */
   --text-xs: 11px;     /* fine print, counts */
   --text-sm: 12px;     /* secondary UI */
