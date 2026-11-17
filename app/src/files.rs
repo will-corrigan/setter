@@ -198,27 +198,11 @@ pub fn save(path: &Path, p: &Puzzle) -> Result<(), String> {
 }
 
 /// The British 15×15 template used for sample puzzles.
-pub const BRITISH_15: [&str; 15] = [
-    ".....#.........",
-    ".#.#.#.#.#.#.#.",
-    ".........#.....",
-    ".#.#.#####.#.#.",
-    ".......#.......",
-    "##.#.#.#.#.###.",
-    "...#.......#...",
-    ".#.###.#.###.#.",
-    "...#.......#...",
-    ".###.#.#.#.#.##",
-    ".......#.......",
-    ".#.#.#####.#.#.",
-    ".....#.........",
-    ".#.#.#.#.#.#.#.",
-    ".........#.....",
-];
+pub const BRITISH_15: &[&str] = xw_engine::templates::TEMPLATES[0].rows;
 
 /// A filled 15×15 puzzle to start clueing straight away.
 pub fn sample_puzzle(lex: &Lexicon) -> Result<Puzzle, String> {
-    sample_puzzle_with(lex, &BRITISH_15, Duration::from_secs(20))
+    sample_puzzle_with(lex, BRITISH_15, Duration::from_secs(20))
 }
 
 /// Autofill `rows` into a new puzzle, or say why it couldn't be filled.
@@ -308,7 +292,7 @@ mod tests {
     fn unfillable_sample_reports_an_error() {
         let lex = Lexicon::from_words(&["cat"]);
         let err =
-            sample_puzzle_with(&lex, &BRITISH_15, std::time::Duration::from_secs(2)).unwrap_err();
+            sample_puzzle_with(&lex, BRITISH_15, std::time::Duration::from_secs(2)).unwrap_err();
         assert!(err.contains("Couldn't fill a sample grid"), "{err}");
     }
 

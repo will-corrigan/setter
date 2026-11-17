@@ -12,6 +12,8 @@ pub mod grid;
 pub mod lexicon;
 pub mod lists;
 pub mod puzzle;
+pub mod rules;
+pub mod templates;
 pub mod text;
 pub mod thesaurus;
 pub mod wordplay;
