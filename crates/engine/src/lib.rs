@@ -9,6 +9,7 @@
 pub mod bank;
 pub mod export;
 pub mod fill;
+pub mod fonts;
 pub mod grid;
 pub mod lexicon;
 pub mod lists;

@@ -1,6 +1,7 @@
 //! Choosing a grid to start from: an overlay of thumbnails, one per
-//! standard grid.
+//! standard grid, a size at a time.
 
+use crate::ds::segmented::Segmented;
 use dioxus::prelude::*;
 
 /// A grid to choose: its name and its rows ('#' is a block).
@@ -18,6 +19,19 @@ pub fn TemplatePicker(
     on_pick: EventHandler<usize>,
     on_close: EventHandler<()>,
 ) -> Element {
+    // The sizes on offer, smallest first; the biggest is shown to start with.
+    let mut sizes: Vec<usize> = grids.iter().map(|g| g.rows.len()).collect();
+    sizes.sort_unstable();
+    sizes.dedup();
+    let mut size = use_signal(|| sizes.last().copied().unwrap_or(0));
+    let shown: Vec<(usize, GridThumb)> = grids
+        .into_iter()
+        .enumerate()
+        .filter(|(_, g)| g.rows.len() == size())
+        .collect();
+    let first = shown.first().map(|(i, _)| *i);
+    let labels: Vec<String> = sizes.iter().map(|n| format!("{n}×{n}")).collect();
+    let at = sizes.iter().position(|n| *n == size()).unwrap_or(0);
     rsx! {
         div {
             class: "template-picker",
@@ -33,9 +47,24 @@ pub fn TemplatePicker(
                 "aria-modal": "true",
                 "aria-label": "{title}",
                 onclick: move |e| e.stop_propagation(),
-                h3 { class: "template-picker__title", "{title}" }
+                div { class: "template-picker__head",
+                    h3 { class: "template-picker__title", "{title}" }
+                    if sizes.len() > 1 {
+                        Segmented {
+                            label: "Grid size",
+                            pills: true,
+                            options: labels,
+                            selected: at,
+                            on_change: move |j: usize| {
+                                if let Some(n) = sizes.get(j) {
+                                    size.set(*n);
+                                }
+                            },
+                        }
+                    }
+                }
                 div { class: "template-picker__grids",
-                    for (i , grid) in grids.into_iter().enumerate() {
+                    for (i , grid) in shown {
                         button {
                             key: "{grid.name}",
                             class: "template-picker__thumb",
@@ -43,7 +72,7 @@ pub fn TemplatePicker(
                             onclick: move |_| on_pick.call(i),
                             // Start on the first grid, so the keyboard works at once.
                             onmounted: move |e| async move {
-                                if i == 0 {
+                                if Some(i) == first {
                                     let _ = e.set_focus(true).await;
                                 }
                             },
@@ -90,14 +119,13 @@ mod tests {
         assert!(html.contains(r#"role="dialog""#), "{html}");
         assert!(html.contains(r#"aria-label="New puzzle""#), "{html}");
         assert!(html.contains(">New puzzle<"), "{html}");
-        assert_eq!(html.matches("template-picker__thumb").count(), 2, "{html}");
-        assert!(html.contains(">British 15 · A<") && html.contains(">British 13 · A<"));
-        assert!(
-            html.contains("--columns: 3") && html.contains("--columns: 2"),
-            "{html}"
-        );
-        // 9 + 4 squares, 2 + 1 of them blocks.
-        assert_eq!(html.matches("<span").count() - 2, 13, "{html}");
-        assert_eq!(html.matches("is-block").count(), 3, "{html}");
+        // A size at a time, the biggest first; a pill for each size.
+        assert_eq!(html.matches("template-picker__thumb").count(), 1, "{html}");
+        assert!(html.contains(">British 15 · A<") && !html.contains(">British 13 · A<"));
+        assert!(html.contains("--columns: 3"), "{html}");
+        assert!(html.contains(">2×2<") && html.contains(">3×3<"), "{html}");
+        assert!(html.contains(r#"aria-label="Grid size""#), "{html}");
+        // 9 squares, 2 of them blocks.
+        assert_eq!(html.matches("is-block").count(), 2, "{html}");
     }
 }

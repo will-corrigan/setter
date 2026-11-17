@@ -10,27 +10,11 @@ use serde_json::{json, Value};
 static TEMPLATE: &str = include_str!("../../assets/player/player.html");
 static CSS: &str = include_str!("../../assets/player/player.css");
 static JS: &str = include_str!("../../assets/player/player.js");
-static FONT_SERIF: &[u8] =
-    include_bytes!("../../../../app/assets/fonts/newsreader-latin-opsz-normal.woff2");
-static FONT_SANS: &[u8] =
-    include_bytes!("../../../../app/assets/fonts/instrument-sans-latin-wght-normal.woff2");
+use crate::fonts;
 
-pub(crate) fn base64(bytes: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let n = (chunk[0] as u32) << 16
-            | (*chunk.get(1).unwrap_or(&0) as u32) << 8
-            | *chunk.get(2).unwrap_or(&0) as u32;
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(T[(n >> (18 - 6 * i) & 63) as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
+/// The fonts the page uses, inlined: the sans and the upright serif.
+fn player_faces() -> String {
+    fonts::face(fonts::SANS_FAMILY, &fonts::SANS) + &fonts::face(fonts::SERIF_FAMILY, &fonts::SERIF)
 }
 
 /// The puzzle as the player's JSON: grid, numbers, word breaks and clues.
@@ -170,8 +154,7 @@ pub fn html(p: &Puzzle) -> String {
             ("TITLE", &html_text(&title)),
             ("BY", &by),
             ("NOTES", &notes),
-            ("FONT_SERIF", &base64(FONT_SERIF)),
-            ("FONT_SANS", &base64(FONT_SANS)),
+            ("FONTS", &player_faces()),
             ("CSS", CSS),
             ("JS", JS),
             ("DATA", &json),
@@ -318,7 +301,7 @@ mod tests {
         assert_eq!(h.matches("window.setterPlayer").count(), 1, "JS once");
         assert_eq!(h.matches(".keys {").count(), 1, "CSS once");
         assert_eq!(h.matches("id=\"setter-data\"").count(), 1, "data once");
-        assert_eq!(h.matches(&base64(FONT_SANS)).count(), 1, "font once");
+        assert_eq!(h.matches(&fonts::base64(fonts::SANS.woff2)).count(), 1, "font once");
         assert!(h.contains("<title>{{JS}} &lt;!--&lt;script&gt;</title>"));
         assert!(h.contains("<h1>{{JS}} &lt;!--&lt;script&gt;</h1>"));
         assert!(h.contains("by {{DATA}} &lt;/script&gt;</span>"));
@@ -377,12 +360,4 @@ mod tests {
         assert_ne!(id(&blank(2, 3, &[])), id(&blank(3, 2, &[])));
     }
 
-    #[test]
-    fn base64_matches_known_values() {
-        assert_eq!(base64(b""), "");
-        assert_eq!(base64(b"f"), "Zg==");
-        assert_eq!(base64(b"fo"), "Zm8=");
-        assert_eq!(base64(b"foo"), "Zm9v");
-        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
-    }
 }

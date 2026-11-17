@@ -102,8 +102,8 @@
 
 :root {
   /* ---------- type ---------- */
-  --font-sans: "Instrument Sans", system-ui, sans-serif;
-  --font-serif: "Newsreader", Georgia, serif;
+  --font-sans: "Setter Sans", system-ui, sans-serif;   /* the files: crates/engine/src/fonts.rs */
+  --font-serif: "Setter Serif", Georgia, serif;
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   --text-2xs: 10.5px;  /* group labels */
   --text-xs: 11px;     /* fine print, counts */
@@ -198,6 +198,7 @@
   --grid-frame: 2px;
   --grid-pitch: calc(var(--grid-cell) + var(--grid-gap)); /* one square and its line */
   --grid-letter-size: 18px;
+  --grid-letter-weight: 600;
   --grid-number-size: 9px;
   --grid-break-width: 4px;
   --grid-hyphen-length: 11px;

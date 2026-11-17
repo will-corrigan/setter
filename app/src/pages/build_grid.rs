@@ -982,12 +982,13 @@ mod tests {
     fn the_picker_lists_every_standard_grid() {
         let html = page(puzzle(), |mut state| state.build.picker_open.set(true));
         assert!(html.contains(r#"class="template-picker""#), "{html}");
-        assert_eq!(
-            html.matches("template-picker__thumb").count(),
-            TEMPLATES.len(),
-            "{html}"
-        );
-        for t in TEMPLATES {
+        // Every size has a pill; the 15×15 grids show first.
+        for n in [5, 7, 9, 11, 13, 15] {
+            assert!(html.contains(&format!(">{n}×{n}<")), "{n}: {html}");
+        }
+        let fifteens = TEMPLATES.iter().filter(|t| t.rows.len() == 15).count();
+        assert_eq!(html.matches("template-picker__thumb").count(), fifteens, "{html}");
+        for t in TEMPLATES.iter().filter(|t| t.rows.len() == 15) {
             assert!(html.contains(&format!(">{}<", t.name)), "{}", t.name);
         }
     }

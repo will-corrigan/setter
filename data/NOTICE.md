@@ -91,10 +91,12 @@ only as slurs were removed.
 
 ## Fonts: app/assets/fonts
 
-Newsreader (Copyright 2020 The Newsreader Project Authors) and Instrument Sans
-(Copyright 2022 The Instrument Sans Project Authors), both licensed under the
-SIL Open Font License, Version 1.1 (https://openfontlicense.org). Files are
-from the Fontsource packages (latin subset, variable).
+Inter (Copyright 2016 The Inter Project Authors, https://github.com/rsms/inter)
+and Newsreader (Copyright 2020 The Newsreader Project Authors), both licensed
+under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+Newsreader is from the Fontsource packages (latin subset, variable); Inter is
+the 4.1 release's variable font, cut to Latin by scripts/subset_font.sh. Which
+font is used where is set in crates/engine/src/fonts.rs.
 
 ## Components: app/src/components
 

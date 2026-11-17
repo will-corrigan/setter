@@ -117,6 +117,6 @@ Built-in data and its licences are listed in [`data/NOTICE.md`](data/NOTICE.md),
 - The Lufz lexicon (from Exet; UKACD18 and CMUdict).
 - Open English WordNet 2025 (CC BY 4.0).
 - Moby Thesaurus II (public domain).
-- Newsreader and Instrument Sans fonts (OFL).
+- Inter and Newsreader fonts (OFL). To try another typeface, change `crates/engine/src/fonts.rs`.
 
 Regenerate the data with `scripts/build_lexicon.py` and `scripts/build_thesaurus.py`.

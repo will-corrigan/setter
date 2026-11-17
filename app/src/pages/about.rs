@@ -28,12 +28,14 @@ mod tests {
             "Open English WordNet",
             "Princeton",
             "Moby",
-            "Newsreader",
-            "Instrument Sans",
             "DioxusLabs",
             "Lucide",
         ] {
             assert!(html.contains(name), "missing {name}");
+        }
+        // Whichever typefaces are bundled.
+        for name in xw_engine::fonts::names() {
+            assert!(html.contains(name), "missing font {name}");
         }
     }
 }

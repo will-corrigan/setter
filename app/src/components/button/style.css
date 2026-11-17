@@ -8,7 +8,7 @@
   padding: 0;
   border: none;
   border-radius: var(--radius-m);
-  cursor: pointer;
+  cursor: default;
   font-family: inherit;
   font-size: var(--text-base);
   font-weight: 500;
