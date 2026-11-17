@@ -1,5 +1,6 @@
 //! Setter: a cryptic crossword setter's desktop app.
 
+mod annotate;
 mod answers;
 mod autosave;
 mod components;
