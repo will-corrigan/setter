@@ -89,6 +89,26 @@ pub fn ensure_user_files_in(dir: &Path) {
     }
 }
 
+/// Add a word or phrase of the user's own to `words.txt` (once).
+pub fn add_own_word(text: &str) -> Result<(), String> {
+    add_own_word_in(&config_dir(), text)
+}
+
+pub fn add_own_word_in(dir: &Path, text: &str) -> Result<(), String> {
+    let path = dir.join("words.txt");
+    let entry = text.trim().to_lowercase();
+    if entry.is_empty() || read_lines(&path).iter().any(|l| l.to_lowercase() == entry) {
+        return Ok(());
+    }
+    let mut contents = fs::read_to_string(&path).unwrap_or_default();
+    if !contents.is_empty() && !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents.push_str(&entry);
+    contents.push('\n');
+    fs::write(&path, contents).map_err(|e| format!("Couldn't add the word: {e}"))
+}
+
 /// Everything the engine needs, with the user's own lists merged in.
 pub struct EngineData {
     pub lex: Lexicon,
@@ -151,6 +171,9 @@ pub struct Settings {
     pub theme: Theme,
     #[serde(default)]
     pub last_file: Option<PathBuf>,
+    /// Put on new puzzles and shown in exports.
+    #[serde(default)]
+    pub setter_name: String,
 }
 
 /// A `<head>` script applying a saved Light/Dark theme before the first paint
@@ -194,31 +217,27 @@ pub fn load(path: &Path) -> Result<Puzzle, String> {
 /// Write a `.xword` puzzle file (pretty JSON).
 pub fn save(path: &Path, p: &Puzzle) -> Result<(), String> {
     let s = serde_json::to_string_pretty(p).map_err(|e| e.to_string())?;
-    fs::write(path, s).map_err(|e| format!("Couldn't save {}: {e}", path.display()))
+    write_whole(path, s.as_bytes()).map_err(|e| format!("Couldn't save {}: {e}", path.display()))
+}
+
+/// Write a file so that a crash part-way leaves the old one intact: write a
+/// temporary file beside it, then rename it into place.
+pub fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".saving");
+    let tmp = PathBuf::from(tmp);
+    fs::write(&tmp, bytes)?;
+    fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })
 }
 
 /// The British 15×15 template used for sample puzzles.
-pub const BRITISH_15: [&str; 15] = [
-    ".....#.........",
-    ".#.#.#.#.#.#.#.",
-    ".........#.....",
-    ".#.#.#####.#.#.",
-    ".......#.......",
-    "##.#.#.#.#.###.",
-    "...#.......#...",
-    ".#.###.#.###.#.",
-    "...#.......#...",
-    ".###.#.#.#.#.##",
-    ".......#.......",
-    ".#.#.#####.#.#.",
-    ".....#.........",
-    ".#.#.#.#.#.#.#.",
-    ".........#.....",
-];
+pub const BRITISH_15: &[&str] = xw_engine::templates::TEMPLATES[0].rows;
 
 /// A filled 15×15 puzzle to start clueing straight away.
 pub fn sample_puzzle(lex: &Lexicon) -> Result<Puzzle, String> {
-    sample_puzzle_with(lex, &BRITISH_15, Duration::from_secs(20))
+    sample_puzzle_with(lex, BRITISH_15, Duration::from_secs(20))
 }
 
 /// Autofill `rows` into a new puzzle, or say why it couldn't be filled.
@@ -262,6 +281,17 @@ mod tests {
     }
 
     #[test]
+    fn own_words_are_added_once_and_count_as_words() {
+        let d = temp_dir("ownwords");
+        ensure_user_files_in(&d);
+        add_own_word_in(&d, "zob rist").unwrap();
+        add_own_word_in(&d, "zob rist").unwrap();
+        let text = fs::read_to_string(d.join("words.txt")).unwrap();
+        assert_eq!(text.lines().filter(|l| *l == "zob rist").count(), 1);
+        assert!(load_engine_data_from(&d).lex.contains("zobrist"));
+    }
+
+    #[test]
     fn puzzle_round_trips() {
         let d = temp_dir("roundtrip");
         let mut p = xw_engine::puzzle::Puzzle::new(3, 3);
@@ -292,6 +322,17 @@ mod tests {
     }
 
     #[test]
+    fn setter_name_is_remembered() {
+        let d = temp_dir("settername");
+        let s = Settings {
+            setter_name: "Gussalufz".into(),
+            ..Default::default()
+        };
+        save_settings_to(&d, &s);
+        assert_eq!(load_settings_from(&d).setter_name, "Gussalufz");
+    }
+
+    #[test]
     fn settings_default_on_garbage() {
         let d = temp_dir("settings");
         fs::write(d.join("settings.json"), "{oops").unwrap();
@@ -299,6 +340,7 @@ mod tests {
         let s = Settings {
             theme: Theme::Dark,
             last_file: Some("x.xword".into()),
+            ..Default::default()
         };
         save_settings_to(&d, &s);
         assert_eq!(load_settings_from(&d), s);
@@ -308,7 +350,7 @@ mod tests {
     fn unfillable_sample_reports_an_error() {
         let lex = Lexicon::from_words(&["cat"]);
         let err =
-            sample_puzzle_with(&lex, &BRITISH_15, std::time::Duration::from_secs(2)).unwrap_err();
+            sample_puzzle_with(&lex, BRITISH_15, std::time::Duration::from_secs(2)).unwrap_err();
         assert!(err.contains("Couldn't fill a sample grid"), "{err}");
     }
 
@@ -325,4 +367,21 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn saving_replaces_the_file_whole() {
+        let d = std::env::temp_dir().join(format!("setter-whole-{}", std::process::id()));
+        fs::create_dir_all(&d).unwrap();
+        let path = d.join("p.xword");
+        fs::write(&path, "old").unwrap();
+        let mut p = Puzzle::new(3, 3);
+        p.title = "New".into();
+        save(&path, &p).unwrap();
+        assert_eq!(load(&path).unwrap().title, "New");
+        // Nothing left over beside it.
+        let names: Vec<_> = fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("p.xword")]);
+        let _ = fs::remove_dir_all(&d);
+    }
+
 }

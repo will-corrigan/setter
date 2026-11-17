@@ -20,6 +20,7 @@
   font-family: var(--font-sans);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
+  white-space: nowrap;
   cursor: pointer;
   outline: none;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);

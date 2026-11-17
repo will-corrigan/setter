@@ -7,7 +7,7 @@ use crate::lexicon::{Lexicon, WordId};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -173,13 +173,16 @@ fn pattern_of(cells: &[u8], light: &Light) -> Vec<u8> {
     light.cells.iter().map(|&i| cells[i]).collect()
 }
 
-/// Ranked fills for one light, checking each against its crossings.
-pub fn suggestions(
+/// Entries fitting one light, each rated against its crossings. Scans at most
+/// `scan` entries that pass `keep`, stopping early once `enough` are viable.
+fn rated(
     lex: &Lexicon,
     index: &FillIndex,
     grid: &Grid,
     light_id: &str,
-    limit: usize,
+    keep: impl Fn(&crate::lexicon::Word) -> bool,
+    scan: usize,
+    enough: usize,
 ) -> Vec<Suggestion> {
     let lights = grid.lights();
     let Some(li) = lights.iter().position(|l| l.id == light_id) else {
@@ -209,8 +212,17 @@ pub fn suggestions(
 
     let m = index.matches(&pattern);
     let mut out: Vec<Suggestion> = Vec::new();
-    for id in m.ids().take(limit * 4) {
+    let mut scanned = 0;
+    let mut viable = 0;
+    for id in m.ids() {
         let w = lex.word(id);
+        if !keep(w) {
+            continue;
+        }
+        scanned += 1;
+        if scanned > scan || viable >= enough {
+            break;
+        }
         let key = w.key.as_bytes();
         for (p, &c) in light.cells.iter().enumerate() {
             cells[c] = key[p];
@@ -226,6 +238,7 @@ pub fn suggestions(
         for (p, &c) in light.cells.iter().enumerate() {
             cells[c] = pattern[p];
         }
+        viable += usize::from(min_crossing > 0);
         out.push(Suggestion {
             text: w.display().to_string(),
             key: w.key.clone(),
@@ -239,7 +252,98 @@ pub fn suggestions(
             },
         });
     }
+    out
+}
+
+/// Ranked fills for one light, checking each against its crossings.
+pub fn suggestions(
+    lex: &Lexicon,
+    index: &FillIndex,
+    grid: &Grid,
+    light_id: &str,
+    limit: usize,
+) -> Vec<Suggestion> {
+    let mut out = rated(lex, index, grid, light_id, |_| true, limit * 4, usize::MAX);
     out.sort_by_key(|s| (!s.viable, s.rank));
+    out.truncate(limit);
+    out
+}
+
+/// How many words an entry should have.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WordCount {
+    #[default]
+    Any,
+    One,
+    Two,
+    ThreePlus,
+}
+
+/// The shape a light's entry must have: an exact split and/or a word count.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Shape {
+    pub enumeration: Option<String>,
+    pub words: WordCount,
+}
+
+impl Shape {
+    pub fn allows(&self, enumeration: &str) -> bool {
+        if let Some(e) = &self.enumeration {
+            if e != enumeration {
+                return false;
+            }
+        }
+        let words = enumeration.matches([',', '-']).count() + 1;
+        match self.words {
+            WordCount::Any => true,
+            WordCount::One => words == 1,
+            WordCount::Two => words == 2,
+            WordCount::ThreePlus => words >= 3,
+        }
+    }
+}
+
+/// A split such as "4,5" or "3-4" normalised, if its parts add up to `len`
+/// and it actually splits the answer. A plain length is no constraint.
+pub fn shape_for(enumeration: &str, len: usize) -> Option<String> {
+    let e: String = enumeration.chars().filter(|c| !c.is_whitespace()).collect();
+    if !e.contains([',', '-'])
+        || !e
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == ',' || c == '-')
+    {
+        return None;
+    }
+    let parts: Option<Vec<usize>> = e
+        .split([',', '-'])
+        .map(|p| p.parse().ok().filter(|&n| n > 0))
+        .collect();
+    (parts?.iter().sum::<usize>() == len).then_some(e)
+}
+
+/// Only entries that keep every crossing fillable and match `shape`; popular
+/// first, and within a band of 1,000 ranks, roomier crossings first.
+pub fn safe_suggestions(
+    lex: &Lexicon,
+    index: &FillIndex,
+    grid: &Grid,
+    light_id: &str,
+    shape: &Shape,
+    limit: usize,
+) -> Vec<Suggestion> {
+    let mut out: Vec<Suggestion> = rated(
+        lex,
+        index,
+        grid,
+        light_id,
+        |w| shape.allows(&w.enumeration()),
+        limit * 8,
+        limit,
+    )
+    .into_iter()
+    .filter(|s| s.viable)
+    .collect();
+    out.sort_by_key(|s| (s.rank / 1000, std::cmp::Reverse(s.min_crossing)));
     out.truncate(limit);
     out
 }
@@ -267,6 +371,8 @@ struct Search<'a> {
     nodes: u64,
     rng: rand::rngs::ThreadRng,
     randomness: f32,
+    /// Per light: the shape its entry must have, if any.
+    shapes: Vec<Option<Shape>>,
 }
 
 impl Search<'_> {
@@ -278,7 +384,7 @@ impl Search<'_> {
 
     fn run(&mut self) -> Result<bool, &'static str> {
         self.nodes += 1;
-        if self.nodes % 256 == 0 {
+        if self.nodes.is_multiple_of(256) {
             if self.cancel.load(Ordering::Relaxed) {
                 return Err("cancelled");
             }
@@ -309,6 +415,11 @@ impl Search<'_> {
             .matches(&pattern)
             .ids()
             .filter(|id| !self.used.contains(id))
+            .filter(|&id| {
+                self.shapes[li]
+                    .as_ref()
+                    .is_none_or(|sh| sh.allows(&self.lex.word(id).enumeration()))
+            })
             .take(300)
             .collect();
         // Keep popularity order roughly, with some shuffling for variety.
@@ -368,6 +479,28 @@ pub fn autofill(
     randomness: f32,
     cancel: &AtomicBool,
 ) -> AutofillResult {
+    autofill_shaped(
+        lex,
+        index,
+        grid,
+        &HashMap::new(),
+        time_limit,
+        randomness,
+        cancel,
+    )
+}
+
+/// Like `autofill`, but lights listed in `shapes` (by light id) only take
+/// entries of that shape, e.g. a "4,5" split.
+pub fn autofill_shaped(
+    lex: &Lexicon,
+    index: &FillIndex,
+    grid: &Grid,
+    shapes: &HashMap<String, Shape>,
+    time_limit: Duration,
+    randomness: f32,
+    cancel: &AtomicBool,
+) -> AutofillResult {
     let start = Instant::now();
     let lights = grid.lights();
     let cell_lights = grid.cell_lights(&lights);
@@ -393,7 +526,13 @@ pub fn autofill(
         nodes: 0,
         rng: rand::thread_rng(),
         randomness: randomness.clamp(0.0, 1.0),
+        shapes: Vec::new(),
     };
+    s.shapes = s
+        .lights
+        .iter()
+        .map(|l| shapes.get(&l.id).cloned())
+        .collect();
     let result = s.run();
     let mut out = grid.clone();
     let (ok, message) = match result {
@@ -454,6 +593,114 @@ mod tests {
         let s = suggestions(lex(), &idx, &g, "0,0,a", 50);
         assert!(!s.is_empty());
         assert!(s.iter().any(|s| s.viable));
+    }
+
+    #[test]
+    fn shape_for_validates() {
+        assert_eq!(shape_for("4,5", 9), Some("4,5".to_string()));
+        assert_eq!(shape_for("4,4", 9), None);
+        assert_eq!(shape_for("9", 9), None);
+        assert_eq!(shape_for(" 3 - 4 ", 7), Some("3-4".to_string()));
+        assert_eq!(shape_for("2,1,3", 6), Some("2,1,3".to_string()));
+        assert_eq!(shape_for("a,b", 2), None);
+    }
+
+    #[test]
+    fn split_filter() {
+        let idx = FillIndex::build(lex(), FillOptions::default());
+        let g = Grid::from_rows(&["........."]);
+        let id = g.lights()[0].id.clone();
+        let two = Shape {
+            enumeration: Some("4,5".into()),
+            words: WordCount::Any,
+        };
+        let s = safe_suggestions(lex(), &idx, &g, &id, &two, 50);
+        assert!(
+            !s.is_empty() && s.iter().all(|x| x.enumeration == "4,5"),
+            "{s:?}"
+        );
+        let s = safe_suggestions(
+            lex(),
+            &idx,
+            &g,
+            &id,
+            &Shape {
+                enumeration: None,
+                words: WordCount::Two,
+            },
+            50,
+        );
+        assert!(
+            !s.is_empty()
+                && s.iter()
+                    .all(|x| x.enumeration.matches([',', '-']).count() == 1)
+        );
+        let s = safe_suggestions(lex(), &idx, &g, &id, &Shape::default(), 50);
+        assert!(s.iter().any(|x| !x.enumeration.contains([',', '-'])));
+        let s = safe_suggestions(
+            lex(),
+            &idx,
+            &g,
+            &id,
+            &Shape {
+                enumeration: None,
+                words: WordCount::One,
+            },
+            50,
+        );
+        assert!(s.iter().all(|x| !x.enumeration.contains([',', '-'])));
+    }
+
+    #[test]
+    fn only_safe_words() {
+        let idx = FillIndex::build(lex(), FillOptions::default());
+        let g = Grid::from_rows(&["...", ".#.", "..."]);
+        let s = safe_suggestions(lex(), &idx, &g, "0,0,a", &Shape::default(), 100);
+        assert!(!s.is_empty() && s.iter().all(|x| x.viable));
+    }
+
+    #[test]
+    fn autofill_respects_splits() {
+        let idx = FillIndex::build(lex(), FillOptions::default());
+        let g = Grid::from_rows(&["........."]);
+        let id = g.lights()[0].id.clone();
+        let shapes = std::collections::HashMap::from([(
+            id.clone(),
+            Shape {
+                enumeration: Some("4,5".into()),
+                words: WordCount::Any,
+            },
+        )]);
+        let r = autofill_shaped(
+            lex(),
+            &idx,
+            &g,
+            &shapes,
+            Duration::from_secs(5),
+            0.0,
+            &AtomicBool::new(false),
+        );
+        assert!(r.ok, "{}", r.message);
+        let (_, text) = r.entries.iter().find(|(l, _)| *l == id).unwrap();
+        assert_eq!(crate::text::enumeration(text), "4,5", "{text}");
+    }
+
+    #[test]
+    fn impossible_fill_leaves_grid_unchanged() {
+        let tiny = crate::Lexicon::from_words(&["cat"]);
+        let idx = FillIndex::build(&tiny, FillOptions::default());
+        let g = Grid::from_rows(&["...", "...", "..."]);
+        let r = autofill_shaped(
+            &tiny,
+            &idx,
+            &g,
+            &Default::default(),
+            Duration::from_secs(2),
+            0.0,
+            &AtomicBool::new(false),
+        );
+        assert!(!r.ok);
+        assert_eq!(r.grid, g);
     }
 
     #[test]

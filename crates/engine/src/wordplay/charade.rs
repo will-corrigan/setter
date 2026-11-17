@@ -44,6 +44,8 @@ pub fn find(ctx: Ctx, target: &str) -> Vec<Charade> {
             score,
         });
     };
+    // Two grids indexed together: a range reads clearer than zipped iterators.
+    #[allow(clippy::needless_range_loop)]
     for i in 1..n {
         if let (Some(a), Some(b)) = (&parts[0][i], &parts[i][n]) {
             push(vec![a, b]);

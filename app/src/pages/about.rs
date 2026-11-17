@@ -31,6 +31,7 @@ mod tests {
             "Newsreader",
             "Instrument Sans",
             "DioxusLabs",
+            "Lucide",
         ] {
             assert!(html.contains(name), "missing {name}");
         }

@@ -155,6 +155,8 @@
   /* ---------- depth ---------- */
   --shadow-1: 0 1px 2px var(--shadow);
   --shadow-2: 0 12px 30px var(--shadow);
+  --shadow-3: 0 20px 50px var(--shadow);
+  --scrim: rgba(10,15,25,.45); /* dims the page behind an overlay */
 
   /* ---------- motion ---------- */
   --dur-fast: 120ms;
@@ -163,11 +165,43 @@
 
   /* ---------- layout ---------- */
   --sidebar-width: 178px;
-  --column-min: 150px;
+  --column-min: 180px;
   --column-max-height: 430px;
   --tile-size: 28px;
   --empty-min-height: 200px;
+  --menu-min-width: 180px;
   --answer-nav-width: 220px; /* room for a 15-letter answer and its label */
+  --icon-size: 16px;
+  --popover-width: 290px;    /* its four word-count chips fit on one row */
+  --popover-height: 380px;   /* the words popover never grows past this */
+  --picker-width: 760px;
+  --clue-number-width: 26px;
+  --build-left-min: 340px;   /* room for the answer bar beside a small grid */
+
+  /*
+   * ---------- crossword grid ----------
+   * A crossword looks like a printed one in light and in dark: white
+   * squares, dark blocks. These are set once, here, and are in neither
+   * palette above. (Your theme.css can still change them.)
+   */
+  --grid-paper: #ffffff;
+  --grid-block: #1d2433;
+  --grid-ink: #1d2433;
+  --grid-number: #5b6474;
+  --grid-answer: #dbe8ff;       /* the selected answer */
+  --grid-current: #1f63d6;      /* the selected square */
+  --grid-current-ink: #ffffff;
+  --grid-break: #1d2433;        /* word-break bars and hyphens */
+  --grid-shadow: 0 1px 3px rgba(0,0,0,.25);
+  --grid-cell: 32px;
+  --grid-gap: 1px;
+  --grid-frame: 2px;
+  --grid-pitch: calc(var(--grid-cell) + var(--grid-gap)); /* one square and its line */
+  --grid-letter-size: 18px;
+  --grid-number-size: 9px;
+  --grid-break-width: 4px;
+  --grid-hyphen-length: 11px;
+  --thumb-cell: 8px;            /* a square in a template thumbnail */
 }
 
 @media (prefers-reduced-motion: reduce) {

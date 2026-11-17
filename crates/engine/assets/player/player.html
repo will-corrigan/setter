@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<!-- Made with Setter. Fonts: Newsreader and Instrument Sans, SIL Open Font License 1.1. -->
+<style>
+@font-face { font-family: "Newsreader"; font-weight: 200 800; src: url(data:font/woff2;base64,{{FONT_SERIF}}) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 400 700; src: url(data:font/woff2;base64,{{FONT_SANS}}) format("woff2"); }
+{{CSS}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <h1>{{TITLE}}</h1>
+    {{BY}}
+    <span class="sp"></span>
+    <span class="timer" id="timer" title="Time">0:00</span>
+  </header>
+  <div class="tools" role="toolbar" aria-label="Solving tools">
+    <div class="menu" data-needs-solution><button class="btn" type="button">Check</button>
+      <div class="menu-list"><button type="button" data-act="check-letter">Letter</button><button type="button" data-act="check-word">Word</button><button type="button" data-act="check-grid">Whole grid</button></div></div>
+    <div class="menu" data-needs-solution><button class="btn" type="button">Reveal</button>
+      <div class="menu-list"><button type="button" data-act="reveal-letter">Letter</button><button type="button" data-act="reveal-word">Word</button><button type="button" data-act="reveal-grid">Whole grid</button></div></div>
+    <div class="menu"><button class="btn" type="button">Clear</button>
+      <div class="menu-list"><button type="button" data-act="clear-word">Word</button><button type="button" data-act="clear-grid">Whole grid</button></div></div>
+    <button class="btn" type="button" id="ana-toggle" aria-pressed="false">Anagram helper</button>
+    <button class="btn" type="button" id="print">Print</button>
+  </div>
+  <section class="helper" id="helper" aria-label="Anagram helper">
+    <div class="wheel" id="wheel" aria-hidden="true"></div>
+    <div>
+      <div class="row"><input class="field" id="ana-letters" placeholder="Letters" aria-label="Letters to rearrange" spellcheck="false"><button class="btn" type="button" id="ana-shuffle">Shuffle</button></div>
+      <div class="row"><input class="field" id="ana-try" placeholder="Try a word" aria-label="Try a word" spellcheck="false"></div>
+      <div class="row small"><span id="ana-count"></span></div>
+      <div class="row small">Left: <span class="left-over" id="ana-left">none</span> <span class="over" id="ana-over"></span></div>
+    </div>
+  </section>
+  <main class="layout">
+    <div class="left">
+      <div class="current" id="current" aria-live="polite"></div>
+      <div class="grid" id="grid"></div>
+      <div class="progress" id="progress"></div>
+    </div>
+    <div class="clues">
+      <section><h2>Across</h2><div id="across"></div></section>
+      <section><h2>Down</h2><div id="down"></div></section>
+    </div>
+  </main>
+  <div class="foot">{{NOTES}}Made with Setter.</div>
+</div>
+<div class="solved" id="solved" role="dialog" aria-label="Solved">
+  <div class="card"><h2>Solved!</h2><p>in <b id="solved-time">0:00</b><span id="solved-help"></span></p><button class="btn" type="button">Close</button></div>
+</div>
+<script type="application/json" id="setter-data">{{DATA}}</script>
+<script>
+{{JS}}
+</script>
+</body>
+</html>

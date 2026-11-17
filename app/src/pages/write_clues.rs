@@ -2,6 +2,7 @@
 
 use crate::ds::clue_field::ClueField;
 use crate::ds::empty_state::EmptyState;
+use crate::ds::inline_edit::InlineEdit;
 use crate::ds::note::Note;
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
@@ -146,6 +147,16 @@ fn Clue() -> Element {
         if let Some(o) = option {
             ReadsAs { text: o.reads_as.clone(), checks }
         }
+        div { class: "clue-note",
+            span { class: "clue-note__label", "Explanation" }
+            InlineEdit {
+                key: "{answer.light_id}",
+                value: state.clue_note(),
+                placeholder: "none yet",
+                label: "Explanation, shown to solvers once they finish",
+                on_change: move |note| state.set_clue_note(note),
+            }
+        }
     }
 }
 
@@ -214,7 +225,7 @@ mod tests {
         render(move || {
             let state = use_app_state(Settings::default);
             use_hook(|| {
-                state.show(p, None, true);
+                state.show(p, None);
                 setup(state);
             });
             rsx! { WriteClues {} }
@@ -226,6 +237,19 @@ mod tests {
             .banks
             .write()
             .insert(pattern.to_string(), Rc::new(build_bank(pattern)));
+    }
+
+    #[test]
+    fn the_clue_s_explanation_shows_and_can_be_edited() {
+        let mut p = puzzle(&["cat", "a#o", "bye"]);
+        p.clues.entry("0,0,a".into()).or_default().annotation = "C + AT".into();
+        let html = page(p, |state| with_bank(state, "cat"));
+        let note = html.find("clue-note").expect("note");
+        assert!(html[note..].contains(">C + AT<"), "{html}");
+        assert!(
+            html.contains(r#"aria-label="Explanation, shown to solvers once they finish""#),
+            "{html}"
+        );
     }
 
     #[test]

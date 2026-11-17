@@ -55,6 +55,9 @@ struct Groups {
     out: Vec<(String, Vec<String>)>,
     seen: HashSet<String>,
     left: usize,
+    /// The base word looked up instead, when the word itself isn't listed
+    /// ("tree" for "trees"); the group titles name it.
+    base: Option<String>,
 }
 
 impl Groups {
@@ -63,6 +66,28 @@ impl Groups {
             out: vec![],
             seen: HashSet::from([word.to_string()]),
             left: limit,
+            base: None,
+        }
+    }
+
+    fn for_base(word: &str, base: Option<&str>, limit: usize) -> Groups {
+        let mut g = Groups::new(word, limit);
+        if let Some(b) = base {
+            g.seen.insert(b.to_string());
+            g.base = Some(b.to_string());
+        }
+        g
+    }
+
+    fn title(&self, name: &str) -> String {
+        let Some(base) = &self.base else {
+            return name.to_string();
+        };
+        match name {
+            "Synonyms" => format!("Synonyms of {base}"),
+            "Broader" => format!("Broader than {base}"),
+            "Related" | "Associated" => format!("{name} to {base}"),
+            _ => format!("{name} ({base})"),
         }
     }
 
@@ -79,7 +104,8 @@ impl Groups {
             }
         }
         if !items.is_empty() {
-            self.out.push((name.to_string(), items));
+            let title = self.title(name);
+            self.out.push((title, items));
         }
     }
 }
@@ -128,6 +154,23 @@ impl Thesaurus {
         }
     }
 
+    fn is_listed(&self, key: &str) -> bool {
+        self.senses.contains_key(key) || self.moby.contains_key(key)
+    }
+
+    /// The word to look up for `word` (lower case), and the base word if it
+    /// had to drop an ending: "trees" → "tree", "carried" → "carry".
+    fn lookup(&self, word: &str) -> (String, Option<String>) {
+        let key = word.trim().to_lowercase();
+        if self.is_listed(&key) {
+            return (key, None);
+        }
+        match base_forms(&key).into_iter().find(|b| self.is_listed(b)) {
+            Some(base) => (base.clone(), Some(base)),
+            None => (key, None),
+        }
+    }
+
     fn sense_ids(&self, key: &str) -> &[u32] {
         self.senses.get(key).map(Vec::as_slice).unwrap_or(&[])
     }
@@ -143,7 +186,7 @@ impl Thesaurus {
 
     /// The word's meanings in WordNet order (most common first), at most `max`.
     pub fn senses(&self, word: &str, max: usize) -> Vec<Sense> {
-        let key = word.trim().to_lowercase();
+        let (key, _) = self.lookup(word);
         self.sense_ids(&key)
             .iter()
             .take(max)
@@ -164,9 +207,9 @@ impl Thesaurus {
 
     /// Words that can stand for `word`: WordNet synonyms, broader terms, then Moby.
     pub fn meanings(&self, word: &str, limit: usize) -> Vec<(String, Vec<String>)> {
-        let key = word.trim().to_lowercase();
+        let (key, base) = self.lookup(word);
         let ids = self.sense_ids(&key);
-        let mut g = Groups::new(&key, limit);
+        let mut g = Groups::for_base(&word.trim().to_lowercase(), base.as_deref(), limit);
         g.add("Synonyms", self.members_of(ids), limit);
         let hypers: Vec<u32> = ids
             .iter()
@@ -179,7 +222,7 @@ impl Thesaurus {
 
     /// Ideas connected to `word`, for cryptic definitions.
     pub fn linked(&self, word: &str, limit: usize) -> Vec<(String, Vec<String>)> {
-        let key = word.trim().to_lowercase();
+        let (key, base) = self.lookup(word);
         if key.is_empty() {
             return vec![];
         }
@@ -189,7 +232,7 @@ impl Thesaurus {
                 .flat_map(|&i| self.synsets[i as usize].rel[slot].clone())
                 .collect()
         };
-        let mut g = Groups::new(&key, limit);
+        let mut g = Groups::for_base(&word.trim().to_lowercase(), base.as_deref(), limit);
         for (name, slot) in [
             ("Kinds", HYPO),
             ("Is a kind of", HYPER),
@@ -205,6 +248,45 @@ impl Thesaurus {
         g.add("Associated", self.moby_words(&key), limit);
         g.out
     }
+}
+
+/// Possible base words for an inflected word, most likely first: plurals
+/// and -s verbs, then -ed, then -ing. Only regular endings.
+fn base_forms(word: &str) -> Vec<String> {
+    let mut out = vec![];
+    let cut = |n: usize| word[..word.len() - n].to_string();
+    // "stopp" → "stop"
+    let undouble = |stem: &str| {
+        let b = stem.as_bytes();
+        (b.len() >= 3 && b[b.len() - 1] == b[b.len() - 2]).then(|| stem[..stem.len() - 1].to_string())
+    };
+    if !word.is_ascii() {
+        return out;
+    }
+    if word.ends_with("ies") {
+        out.push(format!("{}y", cut(3)));
+    }
+    if word.ends_with('s') && !word.ends_with("ss") {
+        out.push(cut(1));
+    }
+    if word.ends_with("es") {
+        out.push(cut(2));
+    }
+    if word.ends_with("ied") {
+        out.push(format!("{}y", cut(3)));
+    }
+    if word.ends_with("ed") {
+        out.push(cut(1));
+        out.push(cut(2));
+        out.extend(undouble(&cut(2)));
+    }
+    if word.ends_with("ing") {
+        out.push(cut(3));
+        out.push(format!("{}e", cut(3)));
+        out.extend(undouble(&cut(3)));
+    }
+    out.retain(|b| b.len() >= 3);
+    out
 }
 
 #[cfg(test)]
@@ -234,6 +316,41 @@ mod tests {
         }
         assert!(!all.contains(&"chest"));
         assert!(all.len() <= 80);
+    }
+
+    #[test]
+    fn inflected_words_fall_back_to_their_base_word() {
+        for (word, base) in [
+            ("trees", "tree"),
+            ("boxes", "box"),
+            ("cherries", "cherry"),
+            ("dodged", "dodge"),
+            ("jumped", "jump"),
+            ("carried", "carry"),
+            ("grabbed", "grab"),
+            ("grabbing", "grab"),
+            ("dodgers", "dodger"),
+        ] {
+            let g = th().meanings(word, 80);
+            assert!(!g.is_empty(), "{word}: nothing");
+            assert!(
+                g.iter().all(|(title, _)| title.ends_with(base)),
+                "{word}: {:?}",
+                g.iter().map(|(t, _)| t).collect::<Vec<_>>()
+            );
+        }
+        let g = th().meanings("trees", 80);
+        assert_eq!(g[0].0, "Synonyms of tree");
+        assert!(!th().linked("orchestras", 80).is_empty());
+        assert!(!th().senses("pitches", 6).is_empty());
+    }
+
+    #[test]
+    fn words_with_their_own_entry_keep_it() {
+        // "dodging" is a noun in its own right.
+        let g = th().meanings("dodging", 80);
+        assert_eq!(g[0].0, "Synonyms");
+        assert!(flat(&g).contains(&"evasion"));
     }
 
     #[test]
