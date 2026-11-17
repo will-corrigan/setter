@@ -24,6 +24,26 @@ fn fold_accent(c: char) -> char {
     }
 }
 
+static OFFENSIVE: &str = include_str!("../../../data/offensive.txt");
+
+/// Does any word of `s` appear in the built-in offensive-words list?
+/// Whole words only: "niggard" and "scunthorpe" are fine.
+pub fn is_offensive(s: &str) -> bool {
+    use std::collections::HashSet;
+    use std::sync::OnceLock;
+    static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    let set = SET.get_or_init(|| {
+        OFFENSIVE
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .collect()
+    });
+    s.split(|c: char| !c.is_alphabetic())
+        .filter(|w| !w.is_empty())
+        .any(|w| set.contains(w.to_lowercase().as_str()))
+}
+
 /// Letter histogram of a key.
 pub type Counts = [u8; 26];
 

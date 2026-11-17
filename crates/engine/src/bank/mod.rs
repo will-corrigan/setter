@@ -257,6 +257,41 @@ mod tests {
     }
 
     #[test]
+    fn loose_synonyms_lead_with_common_words() {
+        let v = build(ctx(), &Indicators::bundled(), thesaurus(), "orchestra");
+        let ch = v.iter().find(|d| d.kind == DeviceKind::Charade).unwrap();
+        let def = ch.options[0]
+            .columns
+            .iter()
+            .find(|c| c.title == "Definition")
+            .unwrap();
+        let related = &def.groups.iter().find(|(g, _)| g == "Related").unwrap().1;
+        let band = related
+            .iter()
+            .position(|w| w == "band")
+            .expect("band listed");
+        assert!(band < 8, "band at {band}: {related:?}");
+        let german = related
+            .iter()
+            .position(|w| w == "German band")
+            .unwrap_or(usize::MAX);
+        assert!(band < german);
+        let everything: Vec<&String> = v
+            .iter()
+            .flat_map(|d| &d.options)
+            .flat_map(|o| &o.columns)
+            .flat_map(|c| &c.groups)
+            .flat_map(|(_, items)| items)
+            .collect();
+        assert!(
+            everything.iter().all(|w| !crate::text::is_offensive(w)),
+            "offensive item listed"
+        );
+        assert!(crate::text::is_offensive("Nigger heaven"));
+        assert!(!crate::text::is_offensive("niggard"));
+    }
+
+    #[test]
     fn blanks_and_tiny_answers_are_all_zero() {
         for a in ["orch?stra", "a", ""] {
             assert!(build(ctx(), &Indicators::bundled(), thesaurus(), a)
