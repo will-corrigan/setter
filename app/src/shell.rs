@@ -88,7 +88,8 @@ fn run_dev_script() {
 async fn fill_sample(mut state: AppState) {
     state.filling.set(true);
     match tokio::task::spawn_blocking(|| files::sample_puzzle(&DATA.lex)).await {
-        Ok(puzzle) => state.show(puzzle, None, false),
+        Ok(Ok(puzzle)) => state.show(puzzle, None, false),
+        Ok(Err(why)) => state.notice.set(Some(why)),
         Err(_) => state
             .notice
             .set(Some("Couldn't fill a sample grid.".into())),

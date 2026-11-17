@@ -207,23 +207,29 @@ pub const BRITISH_15: [&str; 15] = [
 ];
 
 /// A filled 15×15 puzzle to start clueing straight away.
-pub fn sample_puzzle(lex: &Lexicon) -> Puzzle {
-    let mut p = Puzzle::new(15, 15);
+pub fn sample_puzzle(lex: &Lexicon) -> Result<Puzzle, String> {
+    sample_puzzle_with(lex, &BRITISH_15, Duration::from_secs(20))
+}
+
+/// Autofill `rows` into a new puzzle, or say why it couldn't be filled.
+pub fn sample_puzzle_with(lex: &Lexicon, rows: &[&str], limit: Duration) -> Result<Puzzle, String> {
+    let mut p = Puzzle::new(rows[0].len(), rows.len());
     p.title = "Sample puzzle".into();
-    p.grid = Grid::from_rows(&BRITISH_15);
+    p.grid = Grid::from_rows(rows);
     let index = FillIndex::build(lex, FillOptions::default());
     let cancel = AtomicBool::new(false);
-    let result = autofill(lex, &index, &p.grid, Duration::from_secs(20), 0.4, &cancel);
-    if result.ok {
-        p.grid = result.grid;
-        for (id, entry) in result.entries {
-            let en = text::enumeration(&entry);
-            if en.contains([',', '-']) {
-                p.clues.entry(id).or_default().enumeration = en;
-            }
+    let result = autofill(lex, &index, &p.grid, limit, 0.4, &cancel);
+    if !result.ok {
+        return Err(format!("Couldn't fill a sample grid: {}.", result.message));
+    }
+    p.grid = result.grid;
+    for (id, entry) in result.entries {
+        let en = text::enumeration(&entry);
+        if en.contains([',', '-']) {
+            p.clues.entry(id).or_default().enumeration = en;
         }
     }
-    p
+    Ok(p)
 }
 
 #[cfg(test)]
@@ -282,9 +288,17 @@ mod tests {
     }
 
     #[test]
+    fn unfillable_sample_reports_an_error() {
+        let lex = Lexicon::from_words(&["cat"]);
+        let err =
+            sample_puzzle_with(&lex, &BRITISH_15, std::time::Duration::from_secs(2)).unwrap_err();
+        assert!(err.contains("Couldn't fill a sample grid"), "{err}");
+    }
+
+    #[test]
     fn sample_puzzle_is_fully_filled_with_real_words() {
         let data = load_engine_data_from(&temp_dir("sample"));
-        let p = sample_puzzle(&data.lex);
+        let p = sample_puzzle(&data.lex).unwrap();
         assert!(p.grid.cells.iter().all(|c| c.block || c.letter.is_some()));
         for l in p.grid.lights() {
             assert!(
