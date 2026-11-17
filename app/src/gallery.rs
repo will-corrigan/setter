@@ -2,9 +2,11 @@
 //! rendered with real engine data. Run with `setter --gallery`.
 
 use crate::components::button::{Button, ButtonVariant};
+use crate::ds::answer_nav::AnswerNav;
 use crate::ds::chip::Chip;
 use crate::ds::clue_field::ClueField;
 use crate::ds::empty_state::EmptyState;
+use crate::ds::notice::Notice;
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
 use crate::ds::side_nav::{NavItem, SideNav};
@@ -73,6 +75,13 @@ fn Showcase(scope: &'static str) -> Element {
     let mut nav = use_signal(|| "Charade".to_string());
     let mut clue = use_signal(|| "Gold box by artist for band".to_string());
     let mut pick = use_signal(|| Some("box".to_string()));
+    let mut answer = use_signal(|| 0usize);
+    let mut notice = use_signal(|| true);
+    let answers = [
+        ("ORCHESTRA", "10a · 9"),
+        ("OR·HE·TRA", "4d · 9"),
+        ("TEA", "9d · 3"),
+    ];
     let charade = device(DeviceKind::Charade);
     let split = charade
         .options
@@ -113,6 +122,20 @@ fn Showcase(scope: &'static str) -> Element {
                     options: vec!["Build grid".to_string(), "Write clues".to_string()],
                     selected: mode(),
                     on_change: move |i| mode.set(i),
+                }
+            }
+            Section { title: "Answer navigator",
+                AnswerNav {
+                    word: answers[answer()].0,
+                    label: answers[answer()].1,
+                    on_step: move |delta: i32| answer.set((answer() as i32 + delta).rem_euclid(3) as usize),
+                }
+            }
+            Section { title: "Notice",
+                if notice() {
+                    Notice { message: "abbreviations.toml: expected a table at line 4", on_dismiss: move |_| notice.set(false) }
+                } else {
+                    Button { variant: ButtonVariant::Ghost, onclick: move |_| notice.set(true), "Show the notice" }
                 }
             }
             Section { title: "Option pills",
@@ -186,6 +209,8 @@ mod tests {
             "side-nav",
             "reads-as",
             "empty-state",
+            "answer-nav",
+            "notice",
             "dx-toggle",
             "dx-button",
         ] {

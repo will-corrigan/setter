@@ -1,7 +1,5 @@
 //! Files: the user's config folder, puzzle files and settings.
 
-#![allow(dead_code)] // wired into the screens in the page work
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;

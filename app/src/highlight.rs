@@ -1,7 +1,5 @@
 //! Colouring the clue as you type, and the quick checks under it.
 
-#![allow(dead_code)] // wired into the screens in the page work
-
 use xw_engine::bank::Tone;
 
 /// Word tokens: (byte start, byte end, lowercase text). Letters only, so

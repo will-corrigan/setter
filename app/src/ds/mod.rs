@@ -2,9 +2,11 @@
 //! Dioxus components (`crate::components`), styled only through tokens.css.
 //! Pages compose these; they never style raw elements themselves.
 
+pub mod answer_nav;
 pub mod chip;
 pub mod clue_field;
 pub mod empty_state;
+pub mod notice;
 pub mod reads_as;
 pub mod segmented;
 pub mod side_nav;

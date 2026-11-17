@@ -6,6 +6,9 @@ mod ds;
 mod files;
 mod gallery;
 mod highlight;
+mod pages;
+mod shell;
+mod state;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
@@ -60,23 +63,16 @@ fn GalleryApp() -> Element {
     }
 }
 
-/// The app shell. Pages (Write clues, Build grid) are built on the design system next.
+/// The app: its state, what it loads at startup, and the shell around the pages.
 #[component]
 fn App() -> Element {
-    let mut mode = use_signal(|| 1usize);
+    let state = state::use_app_state(|| {
+        files::ensure_user_files();
+        files::load_settings()
+    });
+    shell::use_startup(state);
     rsx! {
         Styles {}
-        div { class: "shell",
-            header { class: "topbar",
-                span { class: "topbar__logo", "Setter" }
-                ds::segmented::Segmented {
-                    label: "Mode",
-                    options: vec!["Build grid".to_string(), "Write clues".to_string()],
-                    selected: mode(),
-                    on_change: move |i| mode.set(i),
-                }
-            }
-            ds::empty_state::EmptyState { message: "Pages are built next, from the design system. Run with --gallery to see it." }
-        }
+        shell::Shell {}
     }
 }

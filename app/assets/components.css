@@ -44,8 +44,19 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---------- answer navigator ---------- */
 .answer-nav { display: flex; align-items: center; gap: var(--space-2); }
+/* A steady width, so the next button stays put from answer to answer. */
+.answer-nav__text { display: flex; align-items: baseline; justify-content: center; gap: var(--space-2); min-width: var(--answer-nav-width); }
 .answer-nav__word { font-weight: var(--weight-bold); letter-spacing: var(--tracking-letters); }
 .answer-nav__label { color: var(--muted); }
+
+/* ---------- notice (one dismissible line) ---------- */
+.notice {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  background: var(--p3-bg); border-bottom: var(--border) solid var(--line);
+  font-size: var(--text-sm);
+}
+.notice__text { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- side navigation (device list) ---------- */
 .side-nav { background: var(--surface); border-right: var(--border) solid var(--line); padding: var(--space-3) var(--space-2); overflow: auto; }
@@ -164,3 +175,18 @@ button, input, textarea { font: inherit; color: inherit; }
 .gallery__section { display: grid; gap: var(--space-2); }
 .gallery__title { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--muted); margin: 0; }
 .gallery__row { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+
+/* ---------- pages ---------- */
+/* Shell: a lone message fills the space under the top bar. */
+.shell > .empty-state { flex: 1; }
+
+/* Write clues: the word bank takes whatever height the window has left. */
+.write-clues { display: flex; flex-direction: column; --column-max-height: none; }
+.write-clues > * { flex: none; }
+.write-clues > .word-bank { flex: 1; min-height: calc(var(--column-min) * 2); }
+/* Tiles, then the option pills, on one row. */
+.clue-head { display: flex; align-items: center; gap: var(--space-2) var(--space-4); flex-wrap: wrap; }
+.clue-head__note { color: var(--muted); font-size: var(--text-sm); }
+/* Only say the word bank is on its way if it takes a while. */
+.word-bank-pending { animation: appear var(--dur) var(--ease) calc(var(--dur) * 3) both; }
+@keyframes appear { from { opacity: 0; } }

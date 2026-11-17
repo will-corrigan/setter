@@ -1,7 +1,5 @@
 //! The puzzle's answers in clue order, and moving between them.
 
-#![allow(dead_code)] // wired into the screens in the page work
-
 use xw_engine::grid::Dir;
 use xw_engine::puzzle::Puzzle;
 
