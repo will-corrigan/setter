@@ -212,7 +212,7 @@ pub const TEMPLATES: &[Template] = &[
     Template {
         name: "British 11 · A",
         rows: &[
-            "...........",
+            ".....#.....",
             ".#.#.#.#.#.",
             "...........",
             ".#.#.#.#.#.",
@@ -222,27 +222,11 @@ pub const TEMPLATES: &[Template] = &[
             ".#.#.#.#.#.",
             "...........",
             ".#.#.#.#.#.",
-            "...........",
+            ".....#.....",
         ],
     },
     Template {
         name: "British 11 · B",
-        rows: &[
-            ".....#.....",
-            ".#.#.#.#.#.",
-            "...........",
-            ".#.#.#.#.#.",
-            "...........",
-            ".#.#.#.#.#.",
-            "...........",
-            ".#.#.#.#.#.",
-            "...........",
-            ".#.#.#.#.#.",
-            ".....#.....",
-        ],
-    },
-    Template {
-        name: "British 11 · C",
         rows: &[
             "...........",
             ".#.#.#.#.#.",
@@ -258,7 +242,7 @@ pub const TEMPLATES: &[Template] = &[
         ],
     },
     Template {
-        name: "British 11 · D",
+        name: "British 11 · C",
         rows: &[
             "...#.......",
             ".#.#.#.#.#.",
@@ -283,7 +267,7 @@ mod tests {
 
     #[test]
     fn every_template_passes_british_rules() {
-        assert_eq!(TEMPLATES.len(), 19);
+        assert_eq!(TEMPLATES.len(), 18);
         for t in TEMPLATES {
             let g = Grid::from_rows(t.rows);
             assert!(

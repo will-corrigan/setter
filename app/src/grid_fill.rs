@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 use xw_engine::fill::{
-    autofill_shaped, safe_suggestions, shape_for, AutofillResult, FillIndex, Shape, Suggestion,
+    autofill_within, safe_suggestions, shape_for, AutofillResult, FillIndex, Shape, Suggestion,
     WordCount,
 };
 use xw_engine::grid::{Dir, Grid, Light};
@@ -251,11 +251,46 @@ fn autofill_patiently(
     limit: Duration,
     cancel: &AtomicBool,
 ) -> AutofillResult {
+    // Everyday words first; rarer ones only if those can't fill the grid.
+    let deadline = Instant::now() + limit;
+    let mut result = None;
+    for (i, &max_rank) in RANK_TIERS.iter().enumerate() {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let last = i + 1 == RANK_TIERS.len();
+        let share = if last { left } else { (limit * TIER_SHARE_PERCENT / 100).min(left) };
+        let r = autofill_in_spells(lex, index, grid, shapes, max_rank, share, cancel);
+        if r.ok || r.message.contains("cancelled") || last {
+            return r;
+        }
+        result = Some(r);
+    }
+    result.expect("at least one tier")
+}
+
+/// The most popular words a fill tries first, then the next, then any word.
+const RANK_TIERS: [u32; 3] = [COMMON_WORDS_FIRST, COMMON_WORDS, u32::MAX];
+/// The words a setter would expect to see: past about this rank the list is
+/// rare plants, chemistry and onomatopoeia ("nemesia", "whoom", "embus").
+pub const COMMON_WORDS: u32 = 100_000;
+const COMMON_WORDS_FIRST: u32 = 60_000;
+/// Of the whole time limit, how much each tier but the last may use.
+const TIER_SHARE_PERCENT: u32 = 35;
+
+/// One tier of a fill, in spells (see [`autofill_patiently`]).
+fn autofill_in_spells(
+    lex: &Lexicon,
+    index: &FillIndex,
+    grid: &Grid,
+    shapes: &HashMap<String, Shape>,
+    max_rank: u32,
+    limit: Duration,
+    cancel: &AtomicBool,
+) -> AutofillResult {
     let deadline = Instant::now() + limit;
     let mut spell = FIRST_SPELL;
     loop {
         let left = deadline.saturating_duration_since(Instant::now());
-        let result = autofill_shaped(lex, index, grid, shapes, spell.min(left), VARIETY, cancel);
+        let result = autofill_within(lex, index, grid, shapes, max_rank, spell.min(left), VARIETY, cancel);
         let out_of_time = !result.ok && result.message.contains("time limit");
         if !out_of_time || left <= spell {
             return result;
@@ -644,6 +679,25 @@ mod tests {
     }
 
     // ---------- fill the rest ----------
+
+    #[test]
+    fn fills_use_everyday_words_on_every_standard_grid() {
+        let e = engine();
+        for t in TEMPLATES {
+            let p = new_puzzle(t.rows);
+            let filled = fill_rest(&e.lex, e.fill(), &p, FILL_TIME, &no_cancel())
+                .unwrap_or_else(|why| panic!("{}: {why}", t.name));
+            for l in filled.grid.lights() {
+                let word = filled.grid.pattern(&l);
+                let rank = e.lex.lookup(&word).map(|id| id + 1);
+                assert!(
+                    rank.is_some_and(|r| r <= COMMON_WORDS),
+                    "{}: {word} is rank {rank:?}",
+                    t.name
+                );
+            }
+        }
+    }
 
     #[test]
     fn fill_the_rest_keeps_letters_and_splits_and_records_new_splits() {

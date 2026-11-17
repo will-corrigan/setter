@@ -5,7 +5,6 @@
 use crate::grid::{Grid, Light};
 use crate::lexicon::{Lexicon, WordId};
 use rand::seq::SliceRandom;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -373,6 +372,8 @@ struct Search<'a> {
     randomness: f32,
     /// Per light: the shape its entry must have, if any.
     shapes: Vec<Option<Shape>>,
+    /// Only entries more popular than this (word ids are popularity order).
+    max_rank: u32,
 }
 
 impl Search<'_> {
@@ -415,6 +416,7 @@ impl Search<'_> {
             .matches(&pattern)
             .ids()
             .filter(|id| !self.used.contains(id))
+            .filter(|&id| id < self.max_rank)
             .filter(|&id| {
                 self.shapes[li]
                     .as_ref()
@@ -422,14 +424,12 @@ impl Search<'_> {
             })
             .take(300)
             .collect();
-        // Keep popularity order roughly, with some shuffling for variety.
+        // Keep popularity order, shuffling only among neighbours for variety:
+        // a rare word never jumps ahead of a common one by more than a chunk.
         if self.randomness > 0.0 {
             let chunk = (8.0 + 40.0 * self.randomness) as usize;
             for c in cands.chunks_mut(chunk) {
                 c.shuffle(&mut self.rng);
-            }
-            if self.rng.gen::<f32>() < self.randomness * 0.3 {
-                cands.shuffle(&mut self.rng);
             }
         }
         let crossing: Vec<usize> = light
@@ -501,6 +501,31 @@ pub fn autofill_shaped(
     randomness: f32,
     cancel: &AtomicBool,
 ) -> AutofillResult {
+    autofill_within(
+        lex,
+        index,
+        grid,
+        shapes,
+        u32::MAX,
+        time_limit,
+        randomness,
+        cancel,
+    )
+}
+
+/// Like `autofill_shaped`, but new entries only come from the `max_rank`
+/// most popular words. Letters already in the grid are kept whatever they spell.
+#[allow(clippy::too_many_arguments)]
+pub fn autofill_within(
+    lex: &Lexicon,
+    index: &FillIndex,
+    grid: &Grid,
+    shapes: &HashMap<String, Shape>,
+    max_rank: u32,
+    time_limit: Duration,
+    randomness: f32,
+    cancel: &AtomicBool,
+) -> AutofillResult {
     let start = Instant::now();
     let lights = grid.lights();
     let cell_lights = grid.cell_lights(&lights);
@@ -527,6 +552,7 @@ pub fn autofill_shaped(
         rng: rand::thread_rng(),
         randomness: randomness.clamp(0.0, 1.0),
         shapes: Vec::new(),
+        max_rank,
     };
     s.shapes = s
         .lights
@@ -701,6 +727,39 @@ mod tests {
         );
         assert!(!r.ok);
         assert_eq!(r.grid, g);
+    }
+
+    #[test]
+    fn autofill_within_keeps_to_the_popular_words() {
+        // Popularity order: cat, dog, fiz. Only FIZ fits "..z".
+        let lex = crate::Lexicon::from_words(&["cat", "dog", "fiz"]);
+        let all = FillOptions {
+            max_rank: u32::MAX,
+            allow_proper: true,
+            allow_phrases: true,
+        };
+        let idx = FillIndex::build(&lex, all);
+        let grid = Grid::from_rows(&["..z"]);
+        let go = |cap| {
+            autofill_within(
+                &lex,
+                &idx,
+                &grid,
+                &HashMap::new(),
+                cap,
+                Duration::from_secs(2),
+                0.0,
+                &AtomicBool::new(false),
+            )
+        };
+        assert!(!go(2).ok, "fiz is the third most popular");
+        let r = go(3);
+        assert!(r.ok, "{}", r.message);
+        assert_eq!(r.grid.pattern(&r.grid.lights()[0]), "fiz");
+        // An open grid takes the most popular word first.
+        let open = Grid::from_rows(&["..."]);
+        let r = autofill_within(&lex, &idx, &open, &HashMap::new(), 1, Duration::from_secs(2), 0.0, &AtomicBool::new(false));
+        assert_eq!(r.grid.pattern(&r.grid.lights()[0]), "cat");
     }
 
     #[test]
