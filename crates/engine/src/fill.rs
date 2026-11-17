@@ -7,7 +7,7 @@ use crate::lexicon::{Lexicon, WordId};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -371,6 +371,8 @@ struct Search<'a> {
     nodes: u64,
     rng: rand::rngs::ThreadRng,
     randomness: f32,
+    /// Per light: the shape its entry must have, if any.
+    shapes: Vec<Option<Shape>>,
 }
 
 impl Search<'_> {
@@ -413,6 +415,11 @@ impl Search<'_> {
             .matches(&pattern)
             .ids()
             .filter(|id| !self.used.contains(id))
+            .filter(|&id| {
+                self.shapes[li]
+                    .as_ref()
+                    .is_none_or(|sh| sh.allows(&self.lex.word(id).enumeration()))
+            })
             .take(300)
             .collect();
         // Keep popularity order roughly, with some shuffling for variety.
@@ -472,6 +479,28 @@ pub fn autofill(
     randomness: f32,
     cancel: &AtomicBool,
 ) -> AutofillResult {
+    autofill_shaped(
+        lex,
+        index,
+        grid,
+        &HashMap::new(),
+        time_limit,
+        randomness,
+        cancel,
+    )
+}
+
+/// Like `autofill`, but lights listed in `shapes` (by light id) only take
+/// entries of that shape, e.g. a "4,5" split.
+pub fn autofill_shaped(
+    lex: &Lexicon,
+    index: &FillIndex,
+    grid: &Grid,
+    shapes: &HashMap<String, Shape>,
+    time_limit: Duration,
+    randomness: f32,
+    cancel: &AtomicBool,
+) -> AutofillResult {
     let start = Instant::now();
     let lights = grid.lights();
     let cell_lights = grid.cell_lights(&lights);
@@ -497,7 +526,13 @@ pub fn autofill(
         nodes: 0,
         rng: rand::thread_rng(),
         randomness: randomness.clamp(0.0, 1.0),
+        shapes: Vec::new(),
     };
+    s.shapes = s
+        .lights
+        .iter()
+        .map(|l| shapes.get(&l.id).cloned())
+        .collect();
     let result = s.run();
     let mut out = grid.clone();
     let (ok, message) = match result {
@@ -622,6 +657,50 @@ mod tests {
         let g = Grid::from_rows(&["...", ".#.", "..."]);
         let s = safe_suggestions(lex(), &idx, &g, "0,0,a", &Shape::default(), 100);
         assert!(!s.is_empty() && s.iter().all(|x| x.viable));
+    }
+
+    #[test]
+    fn autofill_respects_splits() {
+        let idx = FillIndex::build(lex(), FillOptions::default());
+        let g = Grid::from_rows(&["........."]);
+        let id = g.lights()[0].id.clone();
+        let shapes = std::collections::HashMap::from([(
+            id.clone(),
+            Shape {
+                enumeration: Some("4,5".into()),
+                words: WordCount::Any,
+            },
+        )]);
+        let r = autofill_shaped(
+            lex(),
+            &idx,
+            &g,
+            &shapes,
+            Duration::from_secs(5),
+            0.0,
+            &AtomicBool::new(false),
+        );
+        assert!(r.ok, "{}", r.message);
+        let (_, text) = r.entries.iter().find(|(l, _)| *l == id).unwrap();
+        assert_eq!(crate::text::enumeration(text), "4,5", "{text}");
+    }
+
+    #[test]
+    fn impossible_fill_leaves_grid_unchanged() {
+        let tiny = crate::Lexicon::from_words(&["cat"]);
+        let idx = FillIndex::build(&tiny, FillOptions::default());
+        let g = Grid::from_rows(&["...", "...", "..."]);
+        let r = autofill_shaped(
+            &tiny,
+            &idx,
+            &g,
+            &Default::default(),
+            Duration::from_secs(2),
+            0.0,
+            &AtomicBool::new(false),
+        );
+        assert!(!r.ok);
+        assert_eq!(r.grid, g);
     }
 
     #[test]
