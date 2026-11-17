@@ -47,10 +47,10 @@ type Built = (usize, Vec<DeviceOption>);
 /// broader terms are unordered): these are re-ranked so everyday words lead.
 const RANKED_GROUPS: &[&str] = &["Related", "Associated", "Broader"];
 
-/// Drop offensive items everywhere; rank loose lists by popularity.
+/// Drop offensive and user-banned items everywhere; rank loose lists by popularity.
 fn tidy(ctx: Ctx, groups: &mut Vec<(String, Vec<String>)>) {
     for (name, items) in groups.iter_mut() {
-        items.retain(|w| !crate::text::is_offensive(w));
+        items.retain(|w| !crate::text::is_offensive(w) && !ctx.lex.is_banned(w));
         if RANKED_GROUPS.contains(&name.as_str()) {
             items.sort_by_key(|w| ctx.lex.lookup(&crate::text::key(w)).unwrap_or(u32::MAX));
         }

@@ -54,6 +54,8 @@ pub struct Lexicon {
     by_phones: HashMap<String, Vec<WordId>>,
     /// Ids below this are considered "common" words.
     pub common_cutoff: WordId,
+    /// The user's banned words (keys), kept so other word sources can honour them too.
+    banned: HashSet<String>,
 }
 
 pub const DEFAULT_COMMON_CUTOFF: WordId = 40_000;
@@ -155,6 +157,7 @@ impl Lexicon {
             by_len,
             by_phones,
             common_cutoff: DEFAULT_COMMON_CUTOFF,
+            banned: banned.iter().map(|b| text::key(b)).collect(),
         }
     }
 
@@ -176,6 +179,11 @@ impl Lexicon {
 
     pub fn contains(&self, key: &str) -> bool {
         self.by_key.contains_key(key)
+    }
+
+    /// Did the user ban this word or phrase (compared by letters only)?
+    pub fn is_banned(&self, word: &str) -> bool {
+        !self.banned.is_empty() && self.banned.contains(&text::key(word))
     }
 
     pub fn is_common(&self, id: WordId) -> bool {

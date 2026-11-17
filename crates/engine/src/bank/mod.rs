@@ -333,6 +333,35 @@ mod tests {
     }
 
     #[test]
+    fn banned_words_never_appear_in_the_bank() {
+        let banned = std::collections::HashSet::from(["box".to_string(), "coffer".to_string()]);
+        let lex = crate::Lexicon::bundled(&[], &banned);
+        let abbr = crate::Abbreviations::bundled();
+        let v = build(
+            Ctx::new(&lex, &abbr),
+            &Indicators::bundled(),
+            thesaurus(),
+            "orchestra",
+        );
+        let ch = v.iter().find(|d| d.kind == DeviceKind::Charade).unwrap();
+        let opt = ch
+            .options
+            .iter()
+            .find(|o| o.label == "OR + CHEST + RA")
+            .unwrap();
+        let chest: Vec<&str> = opt.columns[1]
+            .groups
+            .iter()
+            .flat_map(|(_, v)| v.iter().map(String::as_str))
+            .collect();
+        assert!(
+            !chest.contains(&"box") && !chest.contains(&"coffer"),
+            "{chest:?}"
+        );
+        assert!(chest.contains(&"casket"));
+    }
+
+    #[test]
     fn blanks_and_tiny_answers_are_all_zero() {
         for a in ["orch?stra", "a", ""] {
             assert!(build(ctx(), &Indicators::bundled(), thesaurus(), a)
