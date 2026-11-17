@@ -26,12 +26,14 @@ pub struct Placement {
 }
 
 /// One word or phrase in the list.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct WordEntry {
     /// As it is written: "cart horse".
     pub text: String,
     /// A phrase's split, e.g. "4,5". `None` for a single word.
     pub split: Option<String>,
+    /// An obscure word or a fragment: shown quieter, listed last.
+    pub rare: bool,
 }
 
 /// The word-count chips, in order.
@@ -165,7 +167,7 @@ pub fn WordPopover(
                             for (i , entry) in list.into_iter().enumerate() {
                                 button {
                                     key: "{entry.text}",
-                                    class: "word-popover__item",
+                                    class: if entry.rare { "word-popover__item is-rare" } else { "word-popover__item" },
                                     r#type: "button",
                                     role: "option",
                                     "aria-selected": "{i == chosen}",
@@ -206,6 +208,7 @@ mod tests {
         WordEntry {
             text: text.into(),
             split: split.map(str::to_string),
+            rare: false,
         }
     }
 
@@ -236,6 +239,16 @@ mod tests {
             column: 9,
             row: 2,
         }
+    }
+
+    #[test]
+    fn rare_words_are_marked_to_show_quieter() {
+        let mut odd = entry("embus", None);
+        odd.rare = true;
+        let html = popover(Some(vec![entry("small", None), odd]), right());
+        assert_eq!(html.matches("is-rare").count(), 1, "{html}");
+        let rare_at = html.find("is-rare").unwrap();
+        assert!(html[rare_at..].contains(">embus<"), "{html}");
     }
 
     #[test]

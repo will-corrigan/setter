@@ -30,6 +30,7 @@ mod tests {
             "Moby",
             "DioxusLabs",
             "Lucide",
+            "Nediger",
         ] {
             assert!(html.contains(name), "missing {name}");
         }

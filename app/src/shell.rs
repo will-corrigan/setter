@@ -120,7 +120,12 @@ fn run_dev_script() {
 
 async fn fill_sample(mut state: AppState) {
     state.filling.set(true);
-    match tokio::task::spawn_blocking(|| files::sample_puzzle(&state::engine().lex)).await {
+    match tokio::task::spawn_blocking(|| {
+        let engine = state::engine();
+        files::sample_puzzle(&engine.lex, engine.fill(), &engine.quality)
+    })
+    .await
+    {
         Ok(Ok(puzzle)) => state.show(state.signed(puzzle), None),
         Ok(Err(why)) => state.notice.set(Some(why)),
         Err(_) => state

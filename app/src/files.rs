@@ -6,9 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use xw_engine::fill::{autofill, FillIndex, FillOptions};
-use xw_engine::grid::Grid;
+use xw_engine::fill::FillIndex;
 use xw_engine::puzzle::Puzzle;
+use xw_engine::quality::Qualities;
 use xw_engine::thesaurus::Thesaurus;
 use xw_engine::{text, Abbreviations, Indicators, Lexicon};
 
@@ -129,6 +129,8 @@ pub struct EngineData {
     pub abbr: Abbreviations,
     pub ind: Indicators,
     pub th: Thesaurus,
+    /// How good each word is as grid fill.
+    pub quality: Qualities,
     /// Problems reading the user's files, shown once in the UI.
     pub warnings: Vec<String>,
 }
@@ -145,6 +147,7 @@ pub fn load_engine_data_from(dir: &Path) -> EngineData {
         .map(|w| text::key(w))
         .collect();
     let lex = Lexicon::bundled(&extra, &banned);
+    let quality = Qualities::bundled(&lex, &extra);
     let mut abbr = Abbreviations::bundled();
     if let Ok(src) = fs::read_to_string(dir.join("abbreviations.toml")) {
         if let Err(e) = abbr.merge_toml(&src) {
@@ -161,6 +164,7 @@ pub fn load_engine_data_from(dir: &Path) -> EngineData {
         lex,
         abbr,
         ind,
+        quality,
         th: Thesaurus::bundled(),
         warnings,
     }
@@ -252,36 +256,36 @@ pub fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// The British 15×15 template used for sample puzzles.
 pub const BRITISH_15: &[&str] = xw_engine::templates::TEMPLATES[0].rows;
 
-/// A filled 15×15 puzzle to start clueing straight away.
-pub fn sample_puzzle(lex: &Lexicon) -> Result<Puzzle, String> {
-    sample_puzzle_with(lex, BRITISH_15, Duration::from_secs(20))
+/// A filled 15×15 puzzle to start clueing straight away, filled like "Fill
+/// the rest": good words first.
+pub fn sample_puzzle(
+    lex: &Lexicon,
+    index: &FillIndex,
+    quality: &Qualities,
+) -> Result<Puzzle, String> {
+    sample_puzzle_with(lex, index, quality, BRITISH_15, Duration::from_secs(20))
 }
 
 /// Autofill `rows` into a new puzzle, or say why it couldn't be filled.
-pub fn sample_puzzle_with(lex: &Lexicon, rows: &[&str], limit: Duration) -> Result<Puzzle, String> {
-    let mut p = Puzzle::new(rows[0].len(), rows.len());
+pub fn sample_puzzle_with(
+    lex: &Lexicon,
+    index: &FillIndex,
+    quality: &Qualities,
+    rows: &[&str],
+    limit: Duration,
+) -> Result<Puzzle, String> {
+    let mut p = crate::grid_fill::new_puzzle(rows);
     p.title = "Sample puzzle".into();
-    p.grid = Grid::from_rows(rows);
-    let index = FillIndex::build(lex, FillOptions::default());
     let cancel = AtomicBool::new(false);
-    let result = autofill(lex, &index, &p.grid, limit, 0.4, &cancel);
-    if !result.ok {
-        return Err(format!("Couldn't fill a sample grid: {}.", result.message));
-    }
-    p.grid = result.grid;
-    for (id, entry) in result.entries {
-        let en = text::enumeration(&entry);
-        if en.contains([',', '-']) {
-            p.clues.entry(id).or_default().enumeration = en;
-        }
-    }
-    Ok(p)
+    crate::grid_fill::fill_rest(lex, index, quality, &p, limit, &cancel)
+        .map_err(|_| "Couldn't fill a sample grid.".to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use xw_engine::fill::FillOptions;
 
     fn temp_dir(name: &str) -> PathBuf {
         let d = scratch_dir(&format!("test-{name}-{}", std::process::id()));
@@ -366,15 +370,23 @@ mod tests {
     #[test]
     fn unfillable_sample_reports_an_error() {
         let lex = Lexicon::from_words(&["cat"]);
-        let err =
-            sample_puzzle_with(&lex, BRITISH_15, std::time::Duration::from_secs(2)).unwrap_err();
+        let index = FillIndex::build(&lex, FillOptions::default());
+        let err = sample_puzzle_with(
+            &lex,
+            &index,
+            &Qualities::default(),
+            BRITISH_15,
+            std::time::Duration::from_secs(2),
+        )
+        .unwrap_err();
         assert!(err.contains("Couldn't fill a sample grid"), "{err}");
     }
 
     #[test]
     fn sample_puzzle_is_fully_filled_with_real_words() {
         let data = load_engine_data_from(&temp_dir("sample"));
-        let p = sample_puzzle(&data.lex).unwrap();
+        let index = FillIndex::build(&data.lex, crate::state::GRID_WORDS);
+        let p = sample_puzzle(&data.lex, &index, &data.quality).unwrap();
         assert!(p.grid.cells.iter().all(|c| c.block || c.letter.is_some()));
         for l in p.grid.lights() {
             assert!(

@@ -170,6 +170,7 @@ fn Showcase(scope: &'static str) -> Element {
     .map(|(text, split)| WordEntry {
         text: text.to_string(),
         split: split.map(str::to_string),
+        rare: false,
     })
     .collect();
     let mut status = vec![

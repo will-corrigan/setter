@@ -261,6 +261,12 @@ pub fn fill_notice(why: String, stopped: bool) -> Option<String> {
     (!stopped).then_some(why)
 }
 
+/// When a fill could only be done with rare words, which ones, so the setter
+/// can swap them.
+pub fn rare_notice(rare: &[String]) -> Option<String> {
+    (!rare.is_empty()).then(|| format!("Filled, but with some rare words: {}.", rare.join(", ")))
+}
+
 /// Stop the fill that is running, leaving the grid as it was.
 pub fn stop_fill(state: AppState) {
     state.build.stop.peek().store(true, Ordering::Relaxed);
@@ -297,13 +303,26 @@ async fn run_fill(
         stop: stop.clone(),
     };
     let flag = stop.clone();
-    let done = tokio::task::spawn_blocking(move || fill(&state::engine(), &puzzle, &flag)).await;
+    let done = tokio::task::spawn_blocking(move || {
+        let engine = state::engine();
+        let filled = fill(&engine, &puzzle, &flag);
+        let rare = filled
+            .as_ref()
+            .map(|f| grid_fill::rare_entries(&engine.lex, &engine.quality, &puzzle, f))
+            .unwrap_or_default();
+        (filled, rare)
+    })
+    .await
+    .map(|(filled, rare)| filled.map(|f| (f, rare)));
     // Before the guard goes: it raises the flag too.
     let stopped = stop.load(Ordering::Relaxed);
     drop(busy);
     match done {
-        Ok(Ok(filled)) => {
+        Ok(Ok((filled, rare))) => {
             take_fill(state, &filled);
+            if let Some(line) = rare_notice(&rare) {
+                state.notice.set(Some(line));
+            }
             true
         }
         Ok(Err(why)) => {
@@ -329,6 +348,7 @@ pub async fn fill_rest(state: AppState) {
         grid_fill::fill_rest(
             &engine.lex,
             engine.fill(),
+            &engine.quality,
             puzzle,
             grid_fill::FILL_TIME,
             stop,
@@ -350,6 +370,7 @@ async fn fill_answer(state: AppState) {
         grid_fill::fill_answer(
             &engine.lex,
             engine.fill(),
+            &engine.quality,
             puzzle,
             &light.id,
             grid_fill::ANSWER_TIME,
@@ -477,6 +498,7 @@ fn use_words(state: AppState) {
                 grid_fill::suggest(
                     &engine.lex,
                     engine.fill(),
+                    &engine.quality,
                     &w.grid,
                     &w.light,
                     &w.split,
@@ -484,6 +506,12 @@ fn use_words(state: AppState) {
                     &w.query,
                     grid_fill::WORD_LIMIT,
                 )
+                .into_iter()
+                .map(|s| {
+                    let q = grid_fill::quality_of(&engine.lex, &engine.quality, &s);
+                    (s, q)
+                })
+                .collect::<Vec<_>>()
             })
             .await;
             if let Ok(words) = search {
@@ -735,6 +763,15 @@ mod tests {
     }
 
     #[test]
+    fn rare_words_in_a_fill_are_named() {
+        assert_eq!(rare_notice(&[]), None);
+        assert_eq!(
+            rare_notice(&["EMBUS".into(), "WHOOM".into()]).as_deref(),
+            Some("Filled, but with some rare words: EMBUS, WHOOM.")
+        );
+    }
+
+    #[test]
     fn a_stopped_fill_says_nothing() {
         let why = "Couldn't fill the rest: stopped.".to_string();
         assert_eq!(fill_notice(why.clone(), true), None);
@@ -902,6 +939,7 @@ mod tests {
                 entries: vec![crate::ds::word_popover::WordEntry {
                     text: "toe".into(),
                     split: None,
+                    rare: false,
                 }],
                 ..Default::default()
             }));
@@ -932,6 +970,7 @@ mod tests {
                 entries: vec![crate::ds::word_popover::WordEntry {
                     text: "cot".into(),
                     split: None,
+                    rare: false,
                 }],
                 ..Default::default()
             }));
@@ -958,6 +997,7 @@ mod tests {
                 entries: vec![crate::ds::word_popover::WordEntry {
                     text: "cat".into(),
                     split: None,
+                    rare: false,
                 }],
                 ..Default::default()
             }));

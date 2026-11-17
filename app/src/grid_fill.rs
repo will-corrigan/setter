@@ -8,11 +8,12 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 use xw_engine::fill::{
-    autofill_within, safe_suggestions, shape_for, AutofillResult, FillIndex, Shape, Suggestion,
-    WordCount,
+    autofill_within, safe_suggestions, shape_for, Admit, AutofillResult, FillIndex, Shape,
+    Suggestion, WordCount,
 };
 use xw_engine::grid::{Dir, Grid, Light};
 use xw_engine::puzzle::Puzzle;
+use xw_engine::quality::{Qualities, Quality};
 use xw_engine::rules::light_name;
 use xw_engine::Lexicon;
 
@@ -148,6 +149,7 @@ pub fn shapes(p: &Puzzle) -> HashMap<String, Shape> {
 pub fn suggest(
     lex: &Lexicon,
     index: &FillIndex,
+    quality: &Qualities,
     grid: &Grid,
     light_id: &str,
     split: &str,
@@ -173,8 +175,38 @@ pub fn suggest(
         limit + used.len(),
     );
     found.retain(|s| !used.contains(&s.key));
+    // Better words first; within each, the engine's order (popular, safe).
+    found.sort_by_key(|s| quality_of(lex, quality, s));
     found.truncate(limit);
     found
+}
+
+/// How good a suggested word is as fill.
+pub fn quality_of(lex: &Lexicon, quality: &Qualities, s: &Suggestion) -> Quality {
+    lex.lookup(&s.key)
+        .map_or(Quality::Rare, |id| quality.of(id))
+}
+
+/// The entries a fill put in that are rare words, in capitals, so the setter
+/// can swap them: answers that were not complete before.
+pub fn rare_entries(
+    lex: &Lexicon,
+    quality: &Qualities,
+    before: &Puzzle,
+    after: &Puzzle,
+) -> Vec<String> {
+    after
+        .grid
+        .lights()
+        .iter()
+        .filter(|l| before.grid.pattern(l).contains('?'))
+        .map(|l| after.grid.pattern(l))
+        .filter(|w| {
+            lex.lookup(w)
+                .is_none_or(|id| quality.of(id) == Quality::Rare)
+        })
+        .map(|w| w.to_uppercase())
+        .collect()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -246,19 +278,28 @@ pub fn next_open(grid: &Grid, c: Cursor) -> Cursor {
 fn autofill_patiently(
     lex: &Lexicon,
     index: &FillIndex,
+    quality: &Qualities,
     grid: &Grid,
     shapes: &HashMap<String, Shape>,
     limit: Duration,
     cancel: &AtomicBool,
 ) -> AutofillResult {
-    // Everyday words first; rarer ones only if those can't fill the grid.
+    // Good words first; fair, then rare ones only if needed to fill the grid.
     let deadline = Instant::now() + limit;
     let mut result = None;
-    for (i, &max_rank) in RANK_TIERS.iter().enumerate() {
+    for (i, &worst) in TIERS.iter().enumerate() {
         let left = deadline.saturating_duration_since(Instant::now());
-        let last = i + 1 == RANK_TIERS.len();
-        let share = if last { left } else { (limit * TIER_SHARE_PERCENT / 100).min(left) };
-        let r = autofill_in_spells(lex, index, grid, shapes, max_rank, share, cancel);
+        let last = i + 1 == TIERS.len();
+        let share = if last {
+            left
+        } else {
+            (limit * TIER_SHARE_PERCENT / 100).min(left)
+        };
+        let admit = Admit {
+            qualities: Some(quality),
+            worst,
+        };
+        let r = autofill_in_spells(lex, index, grid, shapes, admit, share, cancel);
         if r.ok || r.message.contains("cancelled") || last {
             return r;
         }
@@ -267,12 +308,9 @@ fn autofill_patiently(
     result.expect("at least one tier")
 }
 
-/// The most popular words a fill tries first, then the next, then any word.
-const RANK_TIERS: [u32; 3] = [COMMON_WORDS_FIRST, COMMON_WORDS, u32::MAX];
-/// The words a setter would expect to see: past about this rank the list is
-/// rare plants, chemistry and onomatopoeia ("nemesia", "whoom", "embus").
-pub const COMMON_WORDS: u32 = 100_000;
-const COMMON_WORDS_FIRST: u32 = 60_000;
+/// The words a fill may use, tried in turn: good ones only, then fair ones
+/// too, then any word. Within each, better and more familiar words first.
+const TIERS: [Quality; 3] = [Quality::Good, Quality::Fair, Quality::Rare];
 /// Of the whole time limit, how much each tier but the last may use.
 const TIER_SHARE_PERCENT: u32 = 35;
 
@@ -282,7 +320,7 @@ fn autofill_in_spells(
     index: &FillIndex,
     grid: &Grid,
     shapes: &HashMap<String, Shape>,
-    max_rank: u32,
+    admit: Admit<'_>,
     limit: Duration,
     cancel: &AtomicBool,
 ) -> AutofillResult {
@@ -290,7 +328,16 @@ fn autofill_in_spells(
     let mut spell = FIRST_SPELL;
     loop {
         let left = deadline.saturating_duration_since(Instant::now());
-        let result = autofill_within(lex, index, grid, shapes, max_rank, spell.min(left), VARIETY, cancel);
+        let result = autofill_within(
+            lex,
+            index,
+            grid,
+            shapes,
+            admit,
+            spell.min(left),
+            VARIETY,
+            cancel,
+        );
         let out_of_time = !result.ok && result.message.contains("time limit");
         if !out_of_time || left <= spell {
             return result;
@@ -316,11 +363,12 @@ fn why_not(message: &str) -> String {
 pub fn fill_rest(
     lex: &Lexicon,
     index: &FillIndex,
+    quality: &Qualities,
     p: &Puzzle,
     limit: Duration,
     cancel: &AtomicBool,
 ) -> Result<Puzzle, String> {
-    let result = autofill_patiently(lex, index, &p.grid, &shapes(p), limit, cancel);
+    let result = autofill_patiently(lex, index, quality, &p.grid, &shapes(p), limit, cancel);
     if !result.ok {
         return Err(why_not(&result.message));
     }
@@ -393,6 +441,7 @@ pub fn only_this_answer(grid: &Grid, light_id: &str) -> Grid {
 pub fn fill_answer(
     lex: &Lexicon,
     index: &FillIndex,
+    quality: &Qualities,
     p: &Puzzle,
     light_id: &str,
     limit: Duration,
@@ -405,7 +454,7 @@ pub fn fill_answer(
         return Ok(p.clone());
     }
     let prepared = only_this_answer(&p.grid, light_id);
-    let result = autofill_patiently(lex, index, &prepared, &shapes(p), limit, cancel);
+    let result = autofill_patiently(lex, index, quality, &prepared, &shapes(p), limit, cancel);
     let word = result
         .entries
         .into_iter()
@@ -549,6 +598,7 @@ mod tests {
         let open = suggest(
             &e.lex,
             e.fill(),
+            &e.quality,
             &p.grid,
             "2,0,a",
             "",
@@ -562,6 +612,7 @@ mod tests {
         let own = suggest(
             &e.lex,
             e.fill(),
+            &e.quality,
             &p.grid,
             "0,0,a",
             "",
@@ -577,11 +628,31 @@ mod tests {
         let e = engine();
         let p = puzzle(&["........."]);
         let id = "0,0,a";
-        let split = suggest(&e.lex, e.fill(), &p.grid, id, "4,5", WordCount::Any, "", 40);
+        let split = suggest(
+            &e.lex,
+            e.fill(),
+            &e.quality,
+            &p.grid,
+            id,
+            "4,5",
+            WordCount::Any,
+            "",
+            40,
+        );
         assert!(!split.is_empty());
         assert!(split.iter().all(|s| s.enumeration == "4,5"), "{split:?}");
 
-        let two = suggest(&e.lex, e.fill(), &p.grid, id, "", WordCount::Two, "", 40);
+        let two = suggest(
+            &e.lex,
+            e.fill(),
+            &e.quality,
+            &p.grid,
+            id,
+            "",
+            WordCount::Two,
+            "",
+            40,
+        );
         assert!(!two.is_empty());
         assert!(two
             .iter()
@@ -590,6 +661,7 @@ mod tests {
         let searched = suggest(
             &e.lex,
             e.fill(),
+            &e.quality,
             &p.grid,
             id,
             "",
@@ -612,6 +684,7 @@ mod tests {
         let first_page = suggest(
             &e.lex,
             e.fill(),
+            &e.quality,
             &p.grid,
             "0,0,a",
             "",
@@ -623,6 +696,7 @@ mod tests {
         let searched = suggest(
             &e.lex,
             e.fill(),
+            &e.quality,
             &p.grid,
             "0,0,a",
             "",
@@ -644,6 +718,7 @@ mod tests {
             suggest(
                 &lex,
                 &index,
+                &Qualities::default(),
                 &p.grid,
                 "0,0,a",
                 "",
@@ -681,20 +756,16 @@ mod tests {
     // ---------- fill the rest ----------
 
     #[test]
-    fn fills_use_everyday_words_on_every_standard_grid() {
+    fn fills_use_good_words_on_every_standard_grid() {
         let e = engine();
         for t in TEMPLATES {
             let p = new_puzzle(t.rows);
-            let filled = fill_rest(&e.lex, e.fill(), &p, FILL_TIME, &no_cancel())
+            let filled = fill_rest(&e.lex, e.fill(), &e.quality, &p, FILL_TIME, &no_cancel())
                 .unwrap_or_else(|why| panic!("{}: {why}", t.name));
             for l in filled.grid.lights() {
                 let word = filled.grid.pattern(&l);
-                let rank = e.lex.lookup(&word).map(|id| id + 1);
-                assert!(
-                    rank.is_some_and(|r| r <= COMMON_WORDS),
-                    "{}: {word} is rank {rank:?}",
-                    t.name
-                );
+                let quality = e.lex.lookup(&word).map(|id| e.quality.of(id));
+                assert_eq!(quality, Some(Quality::Good), "{}: {word}", t.name);
             }
         }
     }
@@ -716,7 +787,7 @@ mod tests {
         // A single search gets stuck on a split about one time in four;
         // the fill has to come through every time.
         for round in 0..8 {
-            let filled = fill_rest(&e.lex, e.fill(), &p, FILL_TIME, &no_cancel())
+            let filled = fill_rest(&e.lex, e.fill(), &e.quality, &p, FILL_TIME, &no_cancel())
                 .unwrap_or_else(|why| panic!("round {round}: {why}"));
             assert!(filled
                 .grid
@@ -747,7 +818,15 @@ mod tests {
         let lex = Lexicon::from_words(&["cat"]);
         let index = FillIndex::build(&lex, FillOptions::default());
         let p = puzzle(&["...", "...", "..."]);
-        let why = fill_rest(&lex, &index, &p, FILL_TIME, &no_cancel()).unwrap_err();
+        let why = fill_rest(
+            &lex,
+            &index,
+            &Qualities::default(),
+            &p,
+            FILL_TIME,
+            &no_cancel(),
+        )
+        .unwrap_err();
         assert_eq!(
             why,
             "Couldn't fill the rest: no words fit the letters already in the grid."
@@ -832,8 +911,16 @@ mod tests {
             .unwrap()
             .clone();
         grid_edit::set_split(&mut p, &nine.id, "4,5");
-        let filled =
-            fill_answer(&e.lex, e.fill(), &p, &nine.id, ANSWER_TIME, &no_cancel()).expect("fills");
+        let filled = fill_answer(
+            &e.lex,
+            e.fill(),
+            &e.quality,
+            &p,
+            &nine.id,
+            ANSWER_TIME,
+            &no_cancel(),
+        )
+        .expect("fills");
         let word = row(&filled, &nine.id);
         assert!(!word.contains('?'), "{word}");
         let id = e.lex.lookup(&word).expect("a real entry");
@@ -853,8 +940,16 @@ mod tests {
     fn an_answer_nothing_fits_says_so() {
         let e = engine();
         let p = puzzle(&["qqq.."]);
-        let why =
-            fill_answer(&e.lex, e.fill(), &p, "0,0,a", ANSWER_TIME, &no_cancel()).unwrap_err();
+        let why = fill_answer(
+            &e.lex,
+            e.fill(),
+            &e.quality,
+            &p,
+            "0,0,a",
+            ANSWER_TIME,
+            &no_cancel(),
+        )
+        .unwrap_err();
         assert_eq!(why, "Nothing in the word list fits 1 across.");
     }
 
@@ -862,7 +957,16 @@ mod tests {
     fn a_full_answer_is_left_as_it_is() {
         let e = engine();
         let p = puzzle(&["cat", "a#o", "bye"]);
-        let same = fill_answer(&e.lex, e.fill(), &p, "0,0,a", ANSWER_TIME, &no_cancel()).unwrap();
+        let same = fill_answer(
+            &e.lex,
+            e.fill(),
+            &e.quality,
+            &p,
+            "0,0,a",
+            ANSWER_TIME,
+            &no_cancel(),
+        )
+        .unwrap();
         assert_eq!(same, p);
     }
 
@@ -906,6 +1010,7 @@ mod tests {
         let found = suggest(
             &after.lex,
             &index,
+            &after.quality,
             &empty.grid,
             "0,0,a",
             "3,4",
@@ -916,7 +1021,15 @@ mod tests {
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].text, "zob rist");
         // Autofill: it can be used to fill.
-        let filled = fill_rest(&after.lex, &index, &empty, FILL_TIME, &no_cancel()).unwrap();
+        let filled = fill_rest(
+            &after.lex,
+            &index,
+            &after.quality,
+            &empty,
+            FILL_TIME,
+            &no_cancel(),
+        )
+        .unwrap();
         assert_eq!(row(&filled, "0,0,a"), "zobrist");
         assert_eq!(split_of(&filled, "0,0,a"), "3,4");
     }

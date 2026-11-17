@@ -4,6 +4,7 @@
 
 use crate::grid::{Grid, Light};
 use crate::lexicon::{Lexicon, WordId};
+use crate::quality::{Qualities, Quality};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -372,8 +373,28 @@ struct Search<'a> {
     randomness: f32,
     /// Per light: the shape its entry must have, if any.
     shapes: Vec<Option<Shape>>,
-    /// Only entries more popular than this (word ids are popularity order).
-    max_rank: u32,
+    /// Which entries may go in, and in what order.
+    admit: Admit<'a>,
+}
+
+/// Which words a fill may use: those no worse than `worst`, better ones
+/// first. Without qualities, every word, most popular first.
+#[derive(Clone, Copy)]
+pub struct Admit<'a> {
+    pub qualities: Option<&'a Qualities>,
+    pub worst: Quality,
+}
+
+impl Admit<'_> {
+    /// Every word, most popular first.
+    pub const ALL: Admit<'static> = Admit {
+        qualities: None,
+        worst: Quality::Rare,
+    };
+
+    fn quality(&self, id: WordId) -> Quality {
+        self.qualities.map_or(Quality::Good, |q| q.of(id))
+    }
 }
 
 impl Search<'_> {
@@ -416,14 +437,18 @@ impl Search<'_> {
             .matches(&pattern)
             .ids()
             .filter(|id| !self.used.contains(id))
-            .filter(|&id| id < self.max_rank)
+            .filter(|&id| self.admit.quality(id) <= self.admit.worst)
             .filter(|&id| {
                 self.shapes[li]
                     .as_ref()
                     .is_none_or(|sh| sh.allows(&self.lex.word(id).enumeration()))
             })
-            .take(300)
             .collect();
+        // Better words first, most popular first within each quality.
+        if self.admit.qualities.is_some() {
+            cands.sort_by_key(|&id| (self.admit.quality(id), id));
+        }
+        cands.truncate(300);
         // Keep popularity order, shuffling only among neighbours for variety:
         // a rare word never jumps ahead of a common one by more than a chunk.
         if self.randomness > 0.0 {
@@ -506,22 +531,23 @@ pub fn autofill_shaped(
         index,
         grid,
         shapes,
-        u32::MAX,
+        Admit::ALL,
         time_limit,
         randomness,
         cancel,
     )
 }
 
-/// Like `autofill_shaped`, but new entries only come from the `max_rank`
-/// most popular words. Letters already in the grid are kept whatever they spell.
+/// Like `autofill_shaped`, but new entries only come from the words `admit`
+/// lets in, better ones first. Letters already in the grid are kept whatever
+/// they spell.
 #[allow(clippy::too_many_arguments)]
 pub fn autofill_within(
     lex: &Lexicon,
     index: &FillIndex,
     grid: &Grid,
     shapes: &HashMap<String, Shape>,
-    max_rank: u32,
+    admit: Admit<'_>,
     time_limit: Duration,
     randomness: f32,
     cancel: &AtomicBool,
@@ -552,7 +578,7 @@ pub fn autofill_within(
         rng: rand::thread_rng(),
         randomness: randomness.clamp(0.0, 1.0),
         shapes: Vec::new(),
-        max_rank,
+        admit,
     };
     s.shapes = s
         .lights
@@ -730,8 +756,8 @@ mod tests {
     }
 
     #[test]
-    fn autofill_within_keeps_to_the_popular_words() {
-        // Popularity order: cat, dog, fiz. Only FIZ fits "..z".
+    fn autofill_within_keeps_to_good_words_and_tries_them_first() {
+        // Popularity order: cat, dog, fiz; cat is rare, the others good.
         let lex = crate::Lexicon::from_words(&["cat", "dog", "fiz"]);
         let all = FillOptions {
             max_rank: u32::MAX,
@@ -739,27 +765,29 @@ mod tests {
             allow_phrases: true,
         };
         let idx = FillIndex::build(&lex, all);
-        let grid = Grid::from_rows(&["..z"]);
-        let go = |cap| {
-            autofill_within(
+        let q = Qualities::from_vec(vec![Quality::Rare, Quality::Good, Quality::Good]);
+        let go = |rows: &[&str], worst| {
+            let admit = Admit {
+                qualities: Some(&q),
+                worst,
+            };
+            let r = autofill_within(
                 &lex,
                 &idx,
-                &grid,
+                &Grid::from_rows(rows),
                 &HashMap::new(),
-                cap,
+                admit,
                 Duration::from_secs(2),
                 0.0,
                 &AtomicBool::new(false),
-            )
+            );
+            r.ok.then(|| r.grid.pattern(&r.grid.lights()[0]))
         };
-        assert!(!go(2).ok, "fiz is the third most popular");
-        let r = go(3);
-        assert!(r.ok, "{}", r.message);
-        assert_eq!(r.grid.pattern(&r.grid.lights()[0]), "fiz");
-        // An open grid takes the most popular word first.
-        let open = Grid::from_rows(&["..."]);
-        let r = autofill_within(&lex, &idx, &open, &HashMap::new(), 1, Duration::from_secs(2), 0.0, &AtomicBool::new(false));
-        assert_eq!(r.grid.pattern(&r.grid.lights()[0]), "cat");
+        // Only CAT fits "c..": rare, so only when rare words are let in.
+        assert_eq!(go(&["c.."], Quality::Good), None);
+        assert_eq!(go(&["c.."], Quality::Rare).as_deref(), Some("cat"));
+        // An open answer: the most popular good word beats the more popular rare one.
+        assert_eq!(go(&["..."], Quality::Rare).as_deref(), Some("dog"));
     }
 
     #[test]

@@ -346,6 +346,7 @@ button, input, textarea { font: inherit; color: inherit; }
   font-family: var(--font-serif); font-size: var(--text-md); line-height: var(--leading-tight);
 }
 .word-popover__item:hover, .word-popover__item[aria-selected="true"] { background: var(--p1-bg); }
+.word-popover__item.is-rare { color: var(--muted); }
 .word-popover__split { margin-left: var(--space-1-5); font-family: var(--font-sans); font-size: var(--text-xs); color: var(--muted); }
 .word-popover__note { margin: 0; padding: var(--space-1) var(--space-2); font-size: var(--text-sm); color: var(--muted); }
 /* Only say the words are on their way if it takes a while. */

@@ -11,6 +11,7 @@ use crate::grid_fill::split_of;
 use xw_engine::fill::Suggestion;
 use xw_engine::grid::{Dir, Light};
 use xw_engine::puzzle::Puzzle;
+use xw_engine::quality::Quality;
 use xw_engine::rules::{light_name, GridStatus, RuleIssue};
 
 /// The label on a non-word's action in the status line.
@@ -238,10 +239,11 @@ pub fn place_popover(light: &Light, columns: usize, room: Room) -> Placement {
 }
 
 /// The engine's suggestions as the popover lists them: phrases show their split.
-pub fn word_entries(found: Vec<Suggestion>) -> Vec<WordEntry> {
+pub fn word_entries(found: Vec<(Suggestion, Quality)>) -> Vec<WordEntry> {
     found
         .into_iter()
-        .map(|s| WordEntry {
+        .map(|(s, quality)| WordEntry {
+            rare: quality == Quality::Rare,
             split: s.enumeration.contains([',', '-']).then_some(s.enumeration),
             text: s.text,
         })
@@ -579,20 +581,24 @@ mod tests {
                 min_crossing: 3,
             },
         ];
+        let found = found.into_iter().map(|s| (s, Quality::Good)).collect();
         assert_eq!(
             word_entries(found),
             vec![
                 WordEntry {
                     text: "cart horse".into(),
                     split: Some("4,5".into()),
+                    rare: false,
                 },
                 WordEntry {
                     text: "orchestra".into(),
                     split: None,
+                    rare: false,
                 },
                 WordEntry {
                     text: "well-to-do".into(),
                     split: Some("4-2-2".into()),
+                    rare: false,
                 },
             ]
         );
