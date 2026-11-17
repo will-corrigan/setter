@@ -1,5 +1,5 @@
 {
-  description = "Cryptic crossword setter — Rust + Tauri desktop app";
+  description = "Setter — cryptic crossword setter (Rust + Dioxus desktop)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -23,6 +23,12 @@
           atk
           harfbuzz
           glib-networking
+          wayland
+          libxkbcommon
+          libGL
+          fontconfig
+          freetype
+          xdotool
         ];
       in
       {
@@ -34,8 +40,9 @@
             clippy
             rustfmt
             rust-analyzer
-            cargo-tauri
-            nodejs_22
+            dioxus-cli
+            clang
+            mold
             python3
           ];
           buildInputs = libs;
@@ -47,6 +54,10 @@
             # WebKitGTK's DMA-BUF renderer is flaky under WSLg / some GPUs
             export WEBKIT_DISABLE_DMABUF_RENDERER=1
             export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath libs}:/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+            # gcc's collect2 hits "Argument list too long" with this shell's huge NIX_CFLAGS_COMPILE
+            export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang
+            export RUSTFLAGS="-C link-arg=-fuse-ld=mold"
           '';
         };
       });

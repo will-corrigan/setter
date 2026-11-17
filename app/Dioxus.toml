@@ -1,0 +1,7 @@
+[application]
+name = "setter"
+default_platform = "desktop"
+
+[bundle]
+identifier = "dev.local.setter"
+publisher = "Setter"

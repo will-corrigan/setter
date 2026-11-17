@@ -1,0 +1,19 @@
+[package]
+name = "setter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Setter: a cryptic crossword setter's desktop app"
+
+[dependencies]
+dioxus = { version = "0.7", features = ["desktop"] }
+xw-engine = { path = "../crates/engine" }
+serde.workspace = true
+serde_json.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rfd = "0.15"
+dirs = "6"
+tokio = { version = "1", features = ["time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["time", "macros", "rt"] }

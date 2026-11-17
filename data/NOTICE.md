@@ -42,3 +42,9 @@ Pronunciations derive from the CMU Pronouncing Dictionary
 
 ## abbreviations.toml, indicators.toml
 Written for this project.
+
+## Fonts (app/assets/fonts)
+Newsreader (Copyright 2020 The Newsreader Project Authors) and Instrument Sans
+(Copyright 2022 The Instrument Sans Project Authors), both licensed under the
+SIL Open Font License, Version 1.1 (https://openfontlicense.org). Files taken
+from the Fontsource packages (latin subset, variable).
