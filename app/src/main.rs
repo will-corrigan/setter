@@ -46,6 +46,14 @@ fn window_size() -> (f64, f64) {
         .unwrap_or(WINDOW_SIZE)
 }
 
+/// The app icon for the window and taskbar: icons/icon.svg at 64 px, as raw
+/// RGBA. (Installers take the .ico/.icns files; see Dioxus.toml.)
+const WINDOW_ICON: &[u8] = include_bytes!("../icons/window-64.rgba");
+
+fn window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
+    dioxus::desktop::tao::window::Icon::from_rgba(WINDOW_ICON.to_vec(), 64, 64).ok()
+}
+
 fn main() {
     let (width, height) = window_size();
     let cfg = Config::new()
@@ -54,6 +62,7 @@ fn main() {
         .with_window(
             WindowBuilder::new()
                 .with_title("Setter")
+                .with_window_icon(window_icon())
                 .with_inner_size(LogicalSize::new(width, height)),
         );
     if std::env::args().any(|a| a == "--gallery") {
@@ -118,6 +127,12 @@ fn App() -> Element {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_window_icon_is_a_64px_square() {
+        assert_eq!(super::WINDOW_ICON.len(), 64 * 64 * 4);
+        assert!(super::window_icon().is_some());
+    }
+
     use super::*;
 
     #[test]

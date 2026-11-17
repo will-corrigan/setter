@@ -2,6 +2,29 @@
 name = "setter"
 default_platform = "desktop"
 
+# What installers and the OS show for the app. The icon's source is
+# icons/icon.svg (icons/icon-small.svg for 16 and 32 px).
 [bundle]
-identifier = "dev.local.setter"
-publisher = "Setter"
+identifier = "io.github.will-corrigan.setter"
+publisher = "Will Corrigan"
+copyright = "© 2026 Will Corrigan"
+category = "WordGame"
+short_description = "Set British cryptic crosswords"
+long_description = """
+Setter is a desktop app for setting British cryptic crosswords. Fill a standard \
+grid, find words that fit, then write the clues with help for every kind of \
+wordplay. Export a web page anyone can solve in their browser, or .puz and .ipuz \
+files. Works entirely offline."""
+icon = [
+  "icons/32x32.png",
+  "icons/128x128.png",
+  "icons/128x128@2x.png",
+  "icons/icon.icns",
+  "icons/icon.ico",
+]
+
+[bundle.windows]
+icon_path = "icons/icon.ico"
+
+[bundle.windows.nsis]
+installer_icon = "icons/icon.ico"

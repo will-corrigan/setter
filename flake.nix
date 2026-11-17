@@ -49,6 +49,9 @@
             export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
             # WebKitGTK's DMA-BUF renderer is flaky under WSLg / some GPUs
             export WEBKIT_DISABLE_DMABUF_RENDERER=1
+            # Nix sets this for reproducible builds; the AppImage packer
+            # (mksquashfs) refuses it alongside its own timestamp options.
+            unset SOURCE_DATE_EPOCH
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath libs}:/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
             # gcc's collect2 hits "Argument list too long" with this shell's huge NIX_CFLAGS_COMPILE
             export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang
