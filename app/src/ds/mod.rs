@@ -44,7 +44,7 @@ pub fn test_render(make: impl FnOnce() -> dioxus::prelude::Element + 'static) ->
     }
     fn root(p: Root) -> Element {
         let make = p.0.borrow_mut().take();
-        make.map(|f| f()).unwrap_or_else(|| VNode::empty())
+        make.map(|f| f()).unwrap_or_else(VNode::empty)
     }
     let mut dom =
         VirtualDom::new_with_props(root, Root(Rc::new(RefCell::new(Some(Box::new(make))))));

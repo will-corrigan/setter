@@ -2,6 +2,8 @@
 
 use dioxus::prelude::*;
 
+/// Changes are sent as they are typed, so a save mid-edit keeps them.
+/// Escape puts back what was there before; Enter or clicking away finishes.
 #[component]
 pub fn InlineEdit(
     #[props(into)] value: String,
@@ -11,29 +13,31 @@ pub fn InlineEdit(
     on_change: EventHandler<String>,
 ) -> Element {
     let mut is_editing = use_signal(|| editing);
-    let mut draft = use_signal(|| value.clone());
+    // What to put back on Escape.
+    let mut before = use_signal(|| value.clone());
     let shown = if value.trim().is_empty() {
         placeholder.clone()
     } else {
         value.clone()
-    };
-    let mut commit = move || {
-        is_editing.set(false);
-        on_change.call(draft.peek().trim().to_string());
     };
     rsx! {
         if is_editing() {
             input {
                 class: "inline-edit inline-edit--input",
                 "aria-label": "{label}",
-                value: "{draft}",
+                value: "{value}",
                 placeholder: "{placeholder}",
-                autofocus: true,
-                oninput: move |e| draft.set(e.value()),
-                onblur: move |_| commit(),
+                onmounted: move |e| async move {
+                    let _ = e.set_focus(true).await;
+                },
+                oninput: move |e| on_change.call(e.value()),
+                onblur: move |_| is_editing.set(false),
                 onkeydown: move |e: KeyboardEvent| match e.key() {
-                    Key::Enter => commit(),
-                    Key::Escape => is_editing.set(false),
+                    Key::Enter => is_editing.set(false),
+                    Key::Escape => {
+                        on_change.call(before.peek().clone());
+                        is_editing.set(false);
+                    }
                     _ => {}
                 },
             }
@@ -46,7 +50,7 @@ pub fn InlineEdit(
                 onclick: {
                     let value = value.clone();
                     move |_| {
-                        draft.set(value.clone());
+                        before.set(value.clone());
                         is_editing.set(true);
                     }
                 },

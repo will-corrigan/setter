@@ -14,7 +14,7 @@ use std::rc::Rc;
 use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
 use xw_engine::bank::{self, Column, DeviceKind, DeviceOption, DeviceView, Tile, Tone};
 use xw_engine::fill::{FillIndex, FillOptions, WordCount};
-use xw_engine::puzzle::Puzzle;
+use xw_engine::puzzle::{Clue, Puzzle};
 use xw_engine::rules::GridStatus;
 
 // ---------- engine data ----------
@@ -336,6 +336,7 @@ pub enum Shortcut {
     PreviousAnswer,
     NextAnswer,
     Save,
+    SaveAs,
     Undo,
     Redo,
     /// Open or close the words popover.
@@ -352,10 +353,11 @@ impl Shortcut {
 
 /// (key, Alt held, Ctrl held, Shift held, action). The page's key listener
 /// and `shortcut` both read this table.
-pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 6] = [
+pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 7] = [
     ("arrowleft", true, false, false, Shortcut::PreviousAnswer),
     ("arrowright", true, false, false, Shortcut::NextAnswer),
     ("s", false, true, false, Shortcut::Save),
+    ("s", false, true, true, Shortcut::SaveAs),
     ("z", false, true, false, Shortcut::Undo),
     ("z", false, true, true, Shortcut::Redo),
     (" ", false, true, false, Shortcut::Words),
@@ -393,11 +395,17 @@ pub fn shortcut_script() -> String {
     )
 }
 
-// ---------- replacing the puzzle ----------
+// ---------- unsaved work ----------
 
-/// Would replacing the puzzle throw away clues that aren't saved?
-pub fn loses_work(dirty: bool, puzzle: Option<&Puzzle>) -> bool {
-    dirty && puzzle.is_some_and(|p| answers::clued_count(p).0 > 0)
+/// Is there work on screen that isn't saved? Anything that differs from the
+/// clean copy counts: letters, splits, clues, the title. Recovered work has
+/// no clean copy, so it counts until it is saved.
+pub fn unsaved(puzzle: Option<&Puzzle>, pristine: Option<&Puzzle>) -> bool {
+    match (puzzle, pristine) {
+        (None, _) => false,
+        (Some(p), Some(clean)) => p != clean,
+        (Some(_), None) => true,
+    }
 }
 
 // ---------- app state ----------
@@ -422,11 +430,15 @@ impl Shown {
     }
 }
 
-/// The words found for the popover, and the answer they were found for.
-#[derive(Clone, PartialEq, Debug)]
+/// The words found for the popover, and what they were found for: the
+/// answer, its letters and split, the search text and the word-count chip.
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct Found {
     pub light: String,
     pub pattern: String,
+    pub split: String,
+    pub query: String,
+    pub words: WordCount,
     pub entries: Vec<WordEntry>,
 }
 
@@ -465,11 +477,14 @@ pub struct AppState {
     pub puzzle: Signal<Option<Puzzle>>,
     /// Where the puzzle is saved, if it has been.
     pub path: Signal<Option<PathBuf>>,
-    /// Edited since it was last saved or opened.
-    pub dirty: Signal<bool>,
+    /// Differs from how it was when last opened or saved.
+    pub dirty: Memo<bool>,
     /// The puzzle as it was when last shown or saved; `None` for recovered
     /// work. Autosave keeps whatever differs from it.
     pub pristine: Signal<Option<Puzzle>>,
+    /// Each clue's explanation as the picks last wrote it; one the setter has
+    /// changed since is theirs and left alone.
+    pub auto_notes: Signal<HashMap<String, String>>,
     pub mode: Signal<Mode>,
     pub selection: Signal<Selection>,
     pub picks: Signal<Picks>,
@@ -521,6 +536,8 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
             .map(answers::filled_count)
             .unwrap_or_default()
     });
+    let pristine = use_signal(|| None::<Puzzle>);
+    let dirty = use_memo(move || unsaved(puzzle.read().as_ref(), pristine.read().as_ref()));
     let filling = use_signal(|| false);
     let ready = use_memo(move || puzzle.read().is_some() && !filling());
     let build = BuildState {
@@ -543,8 +560,9 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
     let state = AppState {
         puzzle,
         path: use_signal(|| None),
-        dirty: use_signal(|| false),
-        pristine: use_signal(|| None),
+        dirty,
+        pristine,
+        auto_notes: use_signal(HashMap::new),
         mode: use_signal(|| Mode::WriteClues),
         selection,
         picks: use_signal(Picks::new),
@@ -564,9 +582,9 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
 }
 
 impl AppState {
-    /// Show a puzzle, starting at its first answer. `saved` says whether it
-    /// matches the file at `path`.
-    pub fn show(mut self, puzzle: Puzzle, path: Option<PathBuf>, saved: bool) {
+    /// Show a puzzle, starting at its first answer, as the clean copy: it
+    /// matches the file at `path`, or is new.
+    pub fn show(mut self, puzzle: Puzzle, path: Option<PathBuf>) {
         let first = answers::answers(&puzzle)
             .first()
             .map(|a| a.light_id.clone())
@@ -580,25 +598,25 @@ impl AppState {
         self.build.query.set(String::new());
         self.build.found.set(None);
         self.build.status.set(None);
+        self.auto_notes.write().clear();
         self.pristine.set(Some(puzzle.clone()));
         self.puzzle.set(Some(puzzle));
         self.path.set(path);
-        self.dirty.set(!saved);
     }
 
-    /// Show work recovered from the autosave. It has no file and nothing
-    /// clean to compare with, so it stays unsaved until it is saved.
-    pub fn recover(mut self, puzzle: Puzzle) {
-        self.show(puzzle, None, false);
+    /// Show work recovered from the autosave, with the file it was a change
+    /// to, if any. Nothing clean to compare with: it stays unsaved until it
+    /// is saved.
+    pub fn recover(mut self, puzzle: Puzzle, path: Option<PathBuf>) {
+        self.show(puzzle, path);
         self.pristine.set(None);
     }
 
-    /// The puzzle on screen was written to `path`.
-    pub fn saved_to(mut self, path: PathBuf) {
-        let now = self.puzzle.peek().clone();
-        self.pristine.set(now);
+    /// `puzzle` was written to `path`: it is the clean copy now. (Typing
+    /// since it was taken still counts as unsaved.)
+    pub fn saved_to(mut self, path: PathBuf, puzzle: Puzzle) {
+        self.pristine.set(Some(puzzle));
         self.path.set(Some(path));
-        self.dirty.set(false);
     }
 
     /// A new puzzle, signed with the setter's name.
@@ -628,7 +646,6 @@ impl AppState {
         change(&mut puzzle);
         if (puzzle.title.clone(), puzzle.author.clone()) != before {
             self.puzzle.set(Some(puzzle));
-            self.dirty.set(true);
         }
     }
 
@@ -664,9 +681,6 @@ impl AppState {
         if grid_fill::snapshot(&puzzle, cursor) != before {
             self.build.history.write().push(before);
             self.puzzle.set(Some(puzzle));
-            if !*self.dirty.peek() {
-                self.dirty.set(true);
-            }
         }
         Some(result)
     }
@@ -691,7 +705,6 @@ impl AppState {
         grid_fill::restore(&mut puzzle, &snap);
         self.build.cursor.set(snap.cursor);
         self.puzzle.set(Some(puzzle));
-        self.dirty.set(true);
     }
 
     pub fn step(mut self, delta: i32) {
@@ -729,8 +742,8 @@ impl AppState {
         self.selection.set(next);
     }
 
-    /// Pick or un-pick a word, and write the clue's annotation from what
-    /// is picked in that option.
+    /// Pick or un-pick a word. The clue's explanation follows the picks in
+    /// that option, unless the setter has written their own.
     pub fn toggle_pick(mut self, key: PickKey, item: &str) {
         toggle_pick(&mut self.picks.write(), key.clone(), item);
         let (light, device, option, _) = key;
@@ -746,40 +759,75 @@ impl AppState {
             return;
         };
         let note = annotation_for(&self.picks.peek(), &light, device, option, found);
-        // Nothing picked keeps what the clue had, e.g. from the file.
-        if note.is_empty() {
-            return;
-        }
-        let mut changed = false;
-        if let Some(p) = self.puzzle.write().as_mut() {
-            let clue = p.clues.entry(light).or_default();
-            if clue.annotation != note {
-                clue.annotation = note;
-                changed = true;
-            }
-        }
-        if changed && !*self.dirty.peek() {
-            self.dirty.set(true);
+        let current = self.clue_field(&light, |c| c.annotation.clone());
+        let written_by_picks = self.auto_notes.peek().get(&light) == Some(&current);
+        if current.is_empty() || written_by_picks {
+            self.auto_notes.write().insert(light.clone(), note.clone());
+            self.set_clue_field(&light, note, |c| &mut c.annotation);
         }
     }
 
     pub fn clue_text(self) -> String {
         let light = self.selection.read().light.clone();
+        self.read_clue(&light, |c| c.text.clone())
+    }
+
+    /// How the clue on screen works, shown to solvers once they finish.
+    pub fn clue_note(self) -> String {
+        let light = self.selection.read().light.clone();
+        self.read_clue(&light, |c| c.annotation.clone())
+    }
+
+    pub fn set_clue_text(self, text: String) {
+        let light = self.selection.peek().light.clone();
+        self.set_clue_field(&light, text, |c| &mut c.text);
+    }
+
+    /// The setter's own explanation; picks no longer change it.
+    pub fn set_clue_note(self, note: String) {
+        let light = self.selection.peek().light.clone();
+        self.set_clue_field(&light, note, |c| &mut c.annotation);
+    }
+
+    fn read_clue(self, light: &str, get: impl Fn(&Clue) -> String) -> String {
         self.puzzle
             .read()
             .as_ref()
-            .and_then(|p| p.clues.get(&light))
-            .map(|c| c.text.clone())
+            .and_then(|p| p.clues.get(light))
+            .map(get)
             .unwrap_or_default()
     }
 
-    pub fn set_clue_text(mut self, text: String) {
-        let light = self.selection.peek().light.clone();
-        if let Some(p) = self.puzzle.write().as_mut() {
-            p.clues.entry(light).or_default().text = text;
+    fn clue_field(self, light: &str, get: impl Fn(&Clue) -> String) -> String {
+        self.puzzle
+            .peek()
+            .as_ref()
+            .and_then(|p| p.clues.get(light))
+            .map(get)
+            .unwrap_or_default()
+    }
+
+    /// Change one text of a clue, writing to the puzzle only if it differs.
+    fn set_clue_field(
+        mut self,
+        light: &str,
+        value: String,
+        field: impl Fn(&mut Clue) -> &mut String,
+    ) {
+        let same = self
+            .puzzle
+            .peek()
+            .as_ref()
+            .map(|p| {
+                let mut clue = p.clues.get(light).cloned().unwrap_or_default();
+                *field(&mut clue) == value
+            })
+            .unwrap_or(true);
+        if same {
+            return;
         }
-        if !*self.dirty.peek() {
-            self.dirty.set(true);
+        if let Some(p) = self.puzzle.write().as_mut() {
+            *field(p.clues.entry(light.to_string()).or_default()) = value;
         }
     }
 }
@@ -1058,7 +1106,7 @@ mod tests {
         assert_eq!(shortcut("ArrowRight", false, false, false), None);
         assert_eq!(shortcut("s", false, false, false), None);
         assert_eq!(shortcut("s", true, true, false), None);
-        assert_eq!(shortcut("s", false, true, true), None);
+        assert_eq!(shortcut("s", false, true, true), Some(Shortcut::SaveAs));
     }
 
     #[test]
@@ -1115,13 +1163,29 @@ mod tests {
     }
 
     #[test]
-    fn only_unsaved_clues_count_as_work_to_lose() {
-        let mut p = puzzle();
-        assert!(!loses_work(true, Some(&p)));
-        assert!(!loses_work(true, None));
-        p.clues.entry("0,0,a".into()).or_default().text = "Pet".into();
-        assert!(loses_work(true, Some(&p)));
-        assert!(!loses_work(false, Some(&p)));
+    fn any_change_from_the_clean_copy_is_unsaved() {
+        let clean = puzzle();
+        let mut lettered = clean.clone();
+        grid_edit::place(&mut lettered, "0,0,a", "cot");
+        let mut titled = clean.clone();
+        titled.title = "Prize".into();
+        assert!(!unsaved(Some(&clean), Some(&clean)));
+        assert!(unsaved(Some(&lettered), Some(&clean)), "letters alone");
+        assert!(unsaved(Some(&titled), Some(&clean)), "the title alone");
+        assert!(unsaved(Some(&clean), None), "recovered work");
+        assert!(!unsaved(None, None));
+    }
+
+    #[test]
+    fn undoing_back_to_the_saved_grid_is_saved_again() {
+        let said = after(
+            |state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+                state.undo();
+            },
+            |state| format!("{}", (state.dirty)()),
+        );
+        assert_eq!(said, "false");
     }
 
     #[test]
@@ -1139,7 +1203,7 @@ mod tests {
         crate::ds::test_render(move || {
             let state = use_app_state(Settings::default);
             use_hook(|| {
-                state.show(puzzle(), None, true);
+                state.show(puzzle(), None);
                 act(state);
             });
             let text = say(state);
@@ -1226,7 +1290,7 @@ mod tests {
                 state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
                 state.build.words_open.set(true);
                 state.build.picker_open.set(true);
-                state.show(puzzle(), None, true);
+                state.show(puzzle(), None);
             },
             |state| {
                 format!(
@@ -1292,7 +1356,7 @@ mod tests {
         let html = crate::ds::test_render(|| {
             let state = use_app_state(Settings::default);
             use_hook(|| {
-                state.show(puzzle(), None, true);
+                state.show(puzzle(), None);
                 state.step(1);
                 state.set_clue_text("Farewell".into());
             });
@@ -1345,6 +1409,46 @@ mod tests {
         assert_eq!(said, "OR (gold) + CHEST (box)|true");
     }
 
+    /// Show a charade bank for the first answer, then run `act`.
+    fn with_charade(act: impl FnOnce(AppState) + 'static) -> String {
+        after(
+            move |mut state| {
+                let pattern = (state.answer)().unwrap().pattern;
+                let mut charade = device(DeviceKind::Charade, 1, 1);
+                charade.options[0].columns = charade_columns();
+                state.banks.write().insert(pattern, Rc::new(vec![charade]));
+                act(state);
+            },
+            |state| state.clue_note(),
+        )
+    }
+
+    #[test]
+    fn un_picking_everything_clears_the_explanation() {
+        let note = with_charade(|state| {
+            let key = pick_key("0,0,a", DeviceKind::Charade, 0, 0);
+            state.toggle_pick(key.clone(), "gold");
+            state.toggle_pick(key, "gold");
+        });
+        assert_eq!(note, "");
+    }
+
+    #[test]
+    fn the_setter_s_own_explanation_is_left_alone() {
+        let note = with_charade(|state| {
+            state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 0), "gold");
+            state.set_clue_note("OR + CHEST, my way".into());
+            state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 1), "box");
+        });
+        assert_eq!(note, "OR + CHEST, my way");
+        // One from the file counts as the setter's too.
+        let note = with_charade(|state| {
+            state.set_clue_note("From the file".into());
+            state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 0), "gold");
+        });
+        assert_eq!(note, "From the file");
+    }
+
     #[test]
     fn title_and_setter_are_edited_and_the_setter_remembered() {
         let said = after(
@@ -1373,7 +1477,7 @@ mod tests {
             |mut state| {
                 state.settings.write().setter_name = "Quixote".into();
                 let fresh = state.signed(puzzle());
-                state.show(fresh, None, true);
+                state.show(fresh, None);
             },
             |state| state.puzzle.read().as_ref().unwrap().author.clone(),
         );
@@ -1402,7 +1506,8 @@ mod tests {
         let saved = after(
             |state| {
                 state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
-                state.saved_to("/tmp/x.xword".into());
+                let now = state.puzzle.peek().clone().unwrap();
+                state.saved_to("/tmp/x.xword".into(), now);
             },
             |state| {
                 format!(
@@ -1414,7 +1519,7 @@ mod tests {
         );
         assert_eq!(saved, "Remove false");
         let recovered = after(
-            |state| state.recover(puzzle()),
+            |state| state.recover(puzzle(), None),
             |state| {
                 format!(
                     "{:?} {}",

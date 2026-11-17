@@ -94,9 +94,26 @@ pub fn data(p: &Puzzle) -> Value {
             }));
         }
     }
+    // The id keys the solver's saved progress, so it covers everything that
+    // makes this a different puzzle: title, shape, blocks, letters and clues.
+    // Each field ends with a separator byte so adjacent fields can't run
+    // together ("AB"+"" vs "A"+"B").
     let mut h: u64 = 0xcbf29ce484222325;
-    for b in p.title.bytes().chain(cells.concat().bytes()) {
-        h = (h ^ b as u64).wrapping_mul(0x100000001b3);
+    let mut feed = |s: &str| {
+        for b in s.bytes().chain([0x1f]) {
+            h = (h ^ b as u64).wrapping_mul(0x100000001b3);
+        }
+    };
+    feed(&p.title);
+    feed(&g.width.to_string());
+    feed(&g.height.to_string());
+    for c in &cells {
+        feed(c);
+    }
+    for c in &clues {
+        for f in ["dir", "n", "text", "en"] {
+            feed(&c[f].to_string());
+        }
     }
     json!({
         "id": format!("{h:016x}"),
@@ -139,17 +156,58 @@ pub fn html(p: &Puzzle) -> String {
     } else {
         format!("{} ", html_text(p.notes.trim()))
     };
-    // JSON inside <script>: "</" can't appear, or the script would end early.
-    let json = data(p).to_string().replace("</", "<\\/");
-    TEMPLATE
-        .replace("{{TITLE}}", &html_text(&title))
-        .replace("{{BY}}", &by)
-        .replace("{{NOTES}}", &notes)
-        .replace("{{FONT_SERIF}}", &base64(FONT_SERIF))
-        .replace("{{FONT_SANS}}", &base64(FONT_SANS))
-        .replace("{{CSS}}", CSS)
-        .replace("{{JS}}", JS)
-        .replace("{{DATA}}", &json)
+    // JSON inside <script>: no "<", ">" or "&" at all, so neither "</script>"
+    // nor "<!--<script>" can end or derail the block. They only occur inside
+    // JSON strings, where the \u escapes decode back to the same text.
+    let json = data(p)
+        .to_string()
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026");
+    fill(
+        TEMPLATE,
+        &[
+            ("TITLE", &html_text(&title)),
+            ("BY", &by),
+            ("NOTES", &notes),
+            ("FONT_SERIF", &base64(FONT_SERIF)),
+            ("FONT_SANS", &base64(FONT_SANS)),
+            ("CSS", CSS),
+            ("JS", JS),
+            ("DATA", &json),
+        ],
+    )
+}
+
+/// Replaces each `{{NAME}}` in the template with its value, in one pass.
+/// Inserted text is never rescanned, so a title or clue that happens to say
+/// `{{DATA}}` stays as written. Unknown names are left alone.
+fn fill(template: &str, values: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(open) = rest.find("{{") {
+        out.push_str(&rest[..open]);
+        let after = &rest[open + 2..];
+        let value = after.find("}}").and_then(|close| {
+            let name = &after[..close];
+            values
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, v)| (*v, close))
+        });
+        match value {
+            Some((v, close)) => {
+                out.push_str(v);
+                rest = &after[close + 2..];
+            }
+            None => {
+                out.push_str("{{");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 #[cfg(test)]
@@ -230,6 +288,93 @@ mod tests {
         assert!(h.contains("<title>Tiny &lt;test&gt;</title>"));
         assert!(!h.contains("{{"), "every placeholder filled");
         assert!(h.contains("setter-data") && h.contains("window.setterPlayer"));
+    }
+
+    /// The JSON in the page's data block, parsed back.
+    fn embedded_data(h: &str) -> Value {
+        let open = "<script type=\"application/json\" id=\"setter-data\">";
+        let start = h.find(open).expect("data block") + open.len();
+        let end = start + h[start..].find("</script>").expect("data block ends");
+        serde_json::from_str(&h[start..end]).expect("data block is valid JSON")
+    }
+
+    #[test]
+    fn user_text_cannot_inject_placeholders_or_markup() {
+        let mut p = sample();
+        p.title = "{{JS}} <!--<script>".into();
+        p.author = "{{DATA}} </script>".into();
+        p.notes = "{{CSS}} {{NOTES}}".into();
+        let evil = "{{DATA}} </script><img src=x onerror=alert(1)> <!--<script> {{JS}} & >";
+        p.clues.get_mut("0,0,a").unwrap().text = evil.into();
+        let h = html(&p);
+        let d = embedded_data(&h);
+        assert_eq!(d["title"], "{{JS}} <!--<script>");
+        assert_eq!(d["author"], "{{DATA}} </script>");
+        assert_eq!(d["clues"][0]["text"], evil);
+        assert_eq!(d, data(&p), "data block round-trips exactly");
+
+        // User text lands as text, never expanded: the player code, styles,
+        // data and fonts each appear exactly once.
+        assert_eq!(h.matches("window.setterPlayer").count(), 1, "JS once");
+        assert_eq!(h.matches(".keys {").count(), 1, "CSS once");
+        assert_eq!(h.matches("id=\"setter-data\"").count(), 1, "data once");
+        assert_eq!(h.matches(&base64(FONT_SANS)).count(), 1, "font once");
+        assert!(h.contains("<title>{{JS}} &lt;!--&lt;script&gt;</title>"));
+        assert!(h.contains("<h1>{{JS}} &lt;!--&lt;script&gt;</h1>"));
+        assert!(h.contains("by {{DATA}} &lt;/script&gt;</span>"));
+        assert!(h.contains("{{CSS}} {{NOTES}} Made with Setter."));
+        // Only the two scripts the template has: the data block and the player.
+        assert_eq!(h.matches("<script").count(), 2);
+        assert!(!h.contains("<img"), "no markup from clues reaches the page");
+        assert!(!h.contains("<!--<"), "no comment-script trick in the data");
+    }
+
+    #[test]
+    fn data_block_escapes_angle_brackets_and_ampersands() {
+        let mut p = sample();
+        p.clues.get_mut("0,0,a").unwrap().text = "a<b>c&d".into();
+        let h = html(&p);
+        let open = "id=\"setter-data\">";
+        let start = h.find(open).unwrap() + open.len();
+        let block = &h[start..start + h[start..].find("</script>").unwrap()];
+        assert!(!block.contains('<') && !block.contains('>') && !block.contains('&'));
+        assert!(block.contains("a\\u003cb\\u003ec\\u0026d"));
+    }
+
+    #[test]
+    fn fill_replaces_each_placeholder_once_without_rescanning() {
+        let out = fill(
+            "<{{A}}|{{B}}|{{A}}|{{UNKNOWN}}|{{",
+            &[("A", "{{B}}"), ("B", "x")],
+        );
+        assert_eq!(out, "<{{B}}|x|{{B}}|{{UNKNOWN}}|{{");
+    }
+
+    #[test]
+    fn progress_id_depends_on_shape_blocks_and_clues() {
+        let a = sample();
+        let id = |p: &Puzzle| data(p)["id"].as_str().unwrap().to_string();
+        assert_eq!(id(&a), id(&sample()), "deterministic");
+
+        let mut clue = sample();
+        clue.clues.get_mut("0,0,d").unwrap().text = "Cab".into();
+        assert_ne!(id(&a), id(&clue), "a different clue is a different puzzle");
+
+        let mut en = sample();
+        en.clues.get_mut("0,0,d").unwrap().enumeration = "".into();
+        assert_ne!(id(&a), id(&en), "a different enumeration too");
+
+        // Same title, no letters, different shape or blocks.
+        let blank = |w, h, blocks: &[usize]| {
+            let mut p = Puzzle::new(w, h);
+            p.title = "Same".into();
+            for &i in blocks {
+                p.grid.cells[i].block = true;
+            }
+            p
+        };
+        assert_ne!(id(&blank(3, 3, &[])), id(&blank(3, 3, &[4])));
+        assert_ne!(id(&blank(2, 3, &[])), id(&blank(3, 2, &[])));
     }
 
     #[test]

@@ -9,12 +9,9 @@ pub fn autosave_path(dir: &Path) -> PathBuf {
     dir.join("autosave.xword")
 }
 
-pub fn write_autosave(p: &Puzzle) -> Result<(), String> {
-    write_autosave_in(&crate::files::config_dir(), p)
-}
-
-pub fn write_autosave_in(dir: &Path, p: &Puzzle) -> Result<(), String> {
-    crate::files::save(&autosave_path(dir), p)
+/// Beside the autosave: the file the work was a change to, if it had one.
+fn source_path(dir: &Path) -> PathBuf {
+    dir.join("autosave.from")
 }
 
 /// What autosave should do now.
@@ -32,8 +29,27 @@ pub enum Step {
 pub fn step(puzzle: Option<&Puzzle>, pristine: Option<&Puzzle>) -> Step {
     match puzzle {
         None => Step::Nothing,
-        Some(p) if Some(p) == pristine => Step::Remove,
+        Some(_) if !crate::state::unsaved(puzzle, pristine) => Step::Remove,
         Some(_) => Step::Write,
+    }
+}
+
+pub fn write_autosave(p: &Puzzle, source: Option<&Path>) -> Result<(), String> {
+    write_autosave_in(&crate::files::config_dir(), p, source)
+}
+
+pub fn write_autosave_in(dir: &Path, p: &Puzzle, source: Option<&Path>) -> Result<(), String> {
+    crate::files::save(&autosave_path(dir), p)?;
+    match source {
+        Some(path) => crate::files::write_whole(
+            &source_path(dir),
+            path.to_string_lossy().as_bytes(),
+        )
+        .map_err(|e| format!("Couldn't autosave: {e}")),
+        None => {
+            let _ = fs::remove_file(source_path(dir));
+            Ok(())
+        }
     }
 }
 
@@ -43,29 +59,38 @@ pub fn remove_autosave() {
 
 pub fn remove_autosave_in(dir: &Path) {
     let _ = fs::remove_file(autosave_path(dir));
+    let _ = fs::remove_file(source_path(dir));
 }
 
-pub fn recovery(last_file: Option<&Path>) -> Option<Puzzle> {
-    recovery_in(&crate::files::config_dir(), last_file)
+/// Unsaved work, and the file it was a change to.
+pub type Recovered = (Puzzle, Option<PathBuf>);
+
+pub fn recovery() -> Option<Recovered> {
+    recovery_in(&crate::files::config_dir())
 }
 
-/// The autosaved puzzle, if it holds work the last saved file doesn't:
-/// there's no saved file, or the autosave is newer and different.
-pub fn recovery_in(dir: &Path, last_file: Option<&Path>) -> Option<Puzzle> {
+/// The autosaved work, unless the file it was a change to has since been
+/// saved with the same contents, or written again after it.
+pub fn recovery_in(dir: &Path) -> Option<Recovered> {
     let path = autosave_path(dir);
     let auto = crate::files::load(&path).ok()?;
-    let Some(saved_path) = last_file else {
-        return Some(auto);
+    let source = fs::read_to_string(source_path(dir))
+        .ok()
+        .map(|s| PathBuf::from(s.trim()))
+        .filter(|p| !p.as_os_str().is_empty());
+    let Some(saved_path) = source.clone() else {
+        return Some((auto, None));
     };
-    let Ok(saved) = crate::files::load(saved_path) else {
-        return Some(auto);
+    let Ok(saved) = crate::files::load(&saved_path) else {
+        // The file has gone: the work is all there is.
+        return Some((auto, None));
     };
     let modified = |p: &Path| fs::metadata(p).and_then(|m| m.modified()).ok();
-    let newer = match (modified(&path), modified(saved_path)) {
-        (Some(a), Some(s)) => a > s,
+    let newer = match (modified(&path), modified(&saved_path)) {
+        (Some(a), Some(s)) => a >= s,
         _ => true,
     };
-    (newer && auto != saved).then_some(auto)
+    (newer && auto != saved).then_some((auto, source))
 }
 
 #[cfg(test)]
@@ -103,45 +128,55 @@ mod tests {
     #[test]
     fn removing_clears_the_autosave() {
         let d = dir("remove");
-        write_autosave_in(&d, &Puzzle::new(3, 3)).unwrap();
+        write_autosave_in(&d, &Puzzle::new(3, 3), Some(&d.join("a.xword"))).unwrap();
         remove_autosave_in(&d);
-        assert!(recovery_in(&d, None).is_none());
+        assert!(recovery_in(&d).is_none());
+        assert!(!source_path(&d).exists());
         remove_autosave_in(&d); // nothing there: no fuss
     }
 
     #[test]
     fn nothing_to_recover_without_an_autosave() {
-        assert!(recovery_in(&dir("none"), None).is_none());
+        assert!(recovery_in(&dir("none")).is_none());
     }
 
     #[test]
-    fn newer_autosave_is_recovered() {
-        let d = dir("newer");
+    fn work_on_a_new_puzzle_is_recovered_without_a_file() {
+        let d = dir("new");
         let mut p = Puzzle::new(3, 3);
         p.title = "Draft".into();
-        write_autosave_in(&d, &p).unwrap();
-        assert_eq!(recovery_in(&d, None).unwrap().title, "Draft");
+        write_autosave_in(&d, &p, None).unwrap();
+        let (got, from) = recovery_in(&d).unwrap();
+        assert_eq!((got.title.as_str(), from), ("Draft", None));
+    }
+
+    #[test]
+    fn changes_to_a_file_are_recovered_with_that_file() {
+        let d = dir("newer");
         let saved = d.join("mine.xword");
         crate::files::save(&saved, &Puzzle::new(3, 3)).unwrap();
         touch(&saved, 60);
-        assert_eq!(recovery_in(&d, Some(&saved)).unwrap().title, "Draft");
+        let mut p = Puzzle::new(3, 3);
+        p.title = "Draft".into();
+        write_autosave_in(&d, &p, Some(&saved)).unwrap();
+        let (got, from) = recovery_in(&d).unwrap();
+        assert_eq!(got.title, "Draft");
+        assert_eq!(from, Some(saved));
     }
 
     #[test]
-    fn older_or_identical_autosave_is_ignored() {
+    fn work_since_saved_or_overtaken_is_not_recovered() {
         let d = dir("older");
-        let p = Puzzle::new(3, 3);
-        write_autosave_in(&d, &p).unwrap();
-        touch(&autosave_path(&d), 60);
         let saved = d.join("mine.xword");
         let mut newer = Puzzle::new(3, 3);
         newer.title = "Saved".into();
+        // Saved again after the autosave.
+        write_autosave_in(&d, &Puzzle::new(3, 3), Some(&saved)).unwrap();
+        touch(&autosave_path(&d), 60);
         crate::files::save(&saved, &newer).unwrap();
-        assert!(recovery_in(&d, Some(&saved)).is_none(), "older autosave");
-        write_autosave_in(&d, &newer).unwrap();
-        assert!(
-            recovery_in(&d, Some(&saved)).is_none(),
-            "identical to the saved file"
-        );
+        assert!(recovery_in(&d).is_none(), "older autosave");
+        // The same as the file.
+        write_autosave_in(&d, &newer, Some(&saved)).unwrap();
+        assert!(recovery_in(&d).is_none(), "identical to the saved file");
     }
 }

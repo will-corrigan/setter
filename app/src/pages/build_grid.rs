@@ -15,6 +15,7 @@ use crate::grid_fill;
 use crate::grid_view::{self, Room};
 use crate::state::{self, AppState, Found, Mode};
 use dioxus::prelude::*;
+use dioxus::core::spawn_forever;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use xw_engine::fill::WordCount;
@@ -159,6 +160,7 @@ pub fn key(state: AppState, key: GridKey) {
     let next = match key {
         GridKey::Letter(ch) => state.edit(|p| grid_edit::type_letter(p, c, ch)),
         GridKey::Backspace => state.edit(|p| grid_edit::backspace(p, c)),
+        GridKey::Delete => state.edit(|p| grid_edit::delete(p, c)),
         GridKey::Move(rows, columns) => with_grid(state, |g| grid_edit::arrow(g, c, rows, columns)),
         GridKey::Turn => with_grid(state, |g| grid_edit::click(g, c, c.cell)),
         GridKey::NextAnswer => with_grid(state, |g| grid_edit::next_light(g, c, 1)),
@@ -264,6 +266,20 @@ pub fn stop_fill(state: AppState) {
     state.build.stop.peek().store(true, Ordering::Relaxed);
 }
 
+/// While a fill runs. However its task ends, even dropped part-way, the fill
+/// is told to stop and the grid is free again.
+struct Busy {
+    working: Signal<bool>,
+    stop: Arc<AtomicBool>,
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        self.working.set(false);
+    }
+}
+
 /// Run a fill off the UI thread. The grid waits until it is done or
 /// stopped; if it fails, nothing changes and the notice says why.
 async fn run_fill(
@@ -278,17 +294,22 @@ async fn run_fill(
     let stop = Arc::new(AtomicBool::new(false));
     state.build.stop.set(stop.clone());
     state.build.working.set(true);
+    let busy = Busy {
+        working: state.build.working,
+        stop: stop.clone(),
+    };
     let flag = stop.clone();
     let done =
         tokio::task::spawn_blocking(move || fill(&state::engine(), &puzzle, &flag)).await;
-    state.build.working.set(false);
+    // Before the guard goes: it raises the flag too.
+    let stopped = stop.load(Ordering::Relaxed);
+    drop(busy);
     match done {
         Ok(Ok(filled)) => {
             take_fill(state, &filled);
             true
         }
         Ok(Err(why)) => {
-            let stopped = stop.load(Ordering::Relaxed);
             if let Some(line) = fill_notice(why, stopped) {
                 state.notice.set(Some(line));
             }
@@ -355,7 +376,7 @@ fn add_word(mut state: AppState, light_id: &str) {
     let Some(word) = word else {
         return;
     };
-    spawn(async move {
+    spawn_forever(async move {
         let added = tokio::task::spawn_blocking(move || {
             files::add_own_word(&word)?;
             state::reload_engine();
@@ -377,7 +398,7 @@ fn add_word(mut state: AppState, light_id: &str) {
 /// A grid was picked: start an empty puzzle on it.
 fn start_on(state: AppState, template: usize) {
     if let Some(t) = TEMPLATES.get(template) {
-        state.show(state.signed(grid_fill::new_puzzle(t.rows)), None, true);
+        state.show(state.signed(grid_fill::new_puzzle(t.rows)), None);
         focus_grid();
     }
 }
@@ -446,7 +467,14 @@ fn use_words(state: AppState) {
             let Some(w) = wanted else {
                 return;
             };
-            let (light, pattern) = (w.light.clone(), w.pattern.clone());
+            let asked = Found {
+                light: w.light.clone(),
+                pattern: w.pattern.clone(),
+                split: w.split.clone(),
+                query: w.query.clone(),
+                words: w.words,
+                entries: vec![],
+            };
             let search = tokio::task::spawn_blocking(move || {
                 let engine = state::engine();
                 grid_fill::suggest(
@@ -464,9 +492,8 @@ fn use_words(state: AppState) {
             if let Ok(words) = search {
                 let mut found = build.found;
                 found.set(Some(Found {
-                    light,
-                    pattern,
                     entries: grid_view::word_entries(words),
+                    ..asked
                 }));
             }
         }
@@ -573,12 +600,20 @@ fn Words() -> Element {
         return rsx! {};
     };
     let pattern = p.grid.pattern(&light);
-    // Words found for another answer, or for other letters, are not these.
+    // Words found for another answer, other letters or split, or another
+    // search, are not these: Enter mustn't place one of them.
+    let split = grid_fill::split_of(p, &light.id).to_string();
     let entries = build
         .found
         .read()
         .as_ref()
-        .filter(|f| f.light == light.id && f.pattern == pattern)
+        .filter(|f| {
+            f.light == light.id
+                && f.pattern == pattern
+                && f.split == split
+                && f.query == *build.query.read()
+                && f.words == *build.words.read()
+        })
         .map(|f| f.entries.clone());
     let chip = WORD_COUNTS
         .iter()
@@ -596,7 +631,10 @@ fn Words() -> Element {
             on_query: move |text| state.build.query.set(text),
             on_words: move |i: usize| state.build.words.set(WORD_COUNTS[i.min(WORD_COUNTS.len() - 1)]),
             on_place: move |text: String| place_word(state, &text),
-            on_fill: move |_| async move { fill_answer(state).await },
+            // Not tied to the popover: the fill finishes even if the page goes.
+            on_fill: move |_| {
+                spawn_forever(fill_answer(state));
+            },
             on_clear: move |_| clear_answer(state),
             on_close: move |_| {
                 close_words(state);
@@ -676,6 +714,26 @@ mod tests {
     use xw_engine::grid::Dir;
 
     #[test]
+    fn a_fill_dropped_part_way_frees_the_grid_and_stops() {
+        let html = render(|| {
+            let state = use_app_state(Settings::default);
+            let stop = use_hook(|| {
+                let mut working = state.build.working;
+                working.set(true);
+                let stop = Arc::new(AtomicBool::new(false));
+                drop(Busy {
+                    working,
+                    stop: stop.clone(),
+                });
+                stop
+            });
+            let text = format!("{} {}", (state.build.working)(), stop.load(Ordering::Relaxed));
+            rsx! { "{text}" }
+        });
+        assert_eq!(html, "false true");
+    }
+
+    #[test]
     fn a_stopped_fill_says_nothing() {
         let why = "Couldn't fill the rest: stopped.".to_string();
         assert_eq!(fill_notice(why.clone(), true), None);
@@ -697,7 +755,7 @@ mod tests {
             use_hook(|| {
                 let engine = state::engine();
                 let status = grid_status(&engine.lex, engine.fill(), &p.grid);
-                state.show(p, None, true);
+                state.show(p, None);
                 state.mode.set(Mode::BuildGrid);
                 state.build.status.set(Some(status));
                 setup(state);
@@ -844,6 +902,7 @@ mod tests {
                     text: "toe".into(),
                     split: None,
                 }],
+                ..Default::default()
             }));
         });
         let popover = text_of(&html, "word-popover");
@@ -873,9 +932,35 @@ mod tests {
                     text: "cot".into(),
                     split: None,
                 }],
+                ..Default::default()
             }));
         });
         assert!(html.contains("Finding words…"), "{html}");
+        assert!(!html.contains("word-popover__item"), "{html}");
+    }
+
+    #[test]
+    fn words_found_for_an_older_search_are_not_shown() {
+        let html = page(puzzle(), |mut state| {
+            state.build.words_open.set(true);
+            state.build.query.set("co".into());
+            // Found while the box said "c", for the same letters.
+            let pattern = {
+                let p = state.puzzle.peek();
+                let p = p.as_ref().unwrap();
+                p.grid.pattern(&p.grid.lights()[0])
+            };
+            state.build.found.set(Some(Found {
+                light: "0,0,a".into(),
+                pattern,
+                query: "c".into(),
+                entries: vec![crate::ds::word_popover::WordEntry {
+                    text: "cat".into(),
+                    split: None,
+                }],
+                ..Default::default()
+            }));
+        });
         assert!(!html.contains("word-popover__item"), "{html}");
     }
 

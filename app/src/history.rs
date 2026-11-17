@@ -1,8 +1,10 @@
 //! Undo/redo for whole-puzzle snapshots.
 
+use std::collections::VecDeque;
+
 /// Snapshots to undo to, and to redo to, capped in size.
 pub struct History<T> {
-    undo: Vec<T>,
+    undo: VecDeque<T>,
     redo: Vec<T>,
     cap: usize,
 }
@@ -10,7 +12,7 @@ pub struct History<T> {
 impl<T> History<T> {
     pub fn new(cap: usize) -> Self {
         History {
-            undo: vec![],
+            undo: VecDeque::new(),
             redo: vec![],
             cap,
         }
@@ -18,22 +20,22 @@ impl<T> History<T> {
 
     /// Record the state before a change.
     pub fn push(&mut self, before: T) {
-        self.undo.push(before);
+        self.undo.push_back(before);
         if self.undo.len() > self.cap {
-            self.undo.remove(0);
+            self.undo.pop_front();
         }
         self.redo.clear();
     }
 
     pub fn undo(&mut self, current: T) -> Option<T> {
-        let prev = self.undo.pop()?;
+        let prev = self.undo.pop_back()?;
         self.redo.push(current);
         Some(prev)
     }
 
     pub fn redo(&mut self, current: T) -> Option<T> {
         let next = self.redo.pop()?;
-        self.undo.push(current);
+        self.undo.push_back(current);
         Some(next)
     }
 

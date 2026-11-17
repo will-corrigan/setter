@@ -354,6 +354,7 @@ fn Showcase(scope: &'static str) -> Element {
                         let next = match key {
                             GridKey::Letter(ch) => grid_edit::type_letter(&mut puzzle.write(), c, ch),
                             GridKey::Backspace => grid_edit::backspace(&mut puzzle.write(), c),
+                            GridKey::Delete => grid_edit::delete(&mut puzzle.write(), c),
                             GridKey::Move(rows, columns) => {
                                 grid_edit::arrow(&puzzle.read().grid, c, rows, columns)
                             }

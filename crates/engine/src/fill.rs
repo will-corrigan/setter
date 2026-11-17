@@ -384,7 +384,7 @@ impl Search<'_> {
 
     fn run(&mut self) -> Result<bool, &'static str> {
         self.nodes += 1;
-        if self.nodes % 256 == 0 {
+        if self.nodes.is_multiple_of(256) {
             if self.cancel.load(Ordering::Relaxed) {
                 return Err("cancelled");
             }

@@ -95,7 +95,7 @@
     const filled = D.cells.filter((c, i) => open(i) && S.letters[i]).length;
     const total = D.cells.filter((c, i) => open(i)).length;
     $("#progress").textContent = `${filled} of ${total} squares`;
-    tick(false);
+    showTime();
     helperCount();
   }
   let focusClue = true;
@@ -105,10 +105,15 @@
     const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
     return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
   }
-  function tick(advance = true) {
+  // `last` is when time was last added to S.elapsed. Only accrue() moves it,
+  // so redrawing the clock (showTime, on every keystroke) never drops the
+  // time since the last whole-second tick.
+  function accrue() {
     const now = Date.now();
-    if (advance && running && !document.hidden) S.elapsed += now - last;
+    if (running) S.elapsed += now - last;
     last = now;
+  }
+  function showTime() {
     const t = $("#timer");
     t.textContent = fmt(S.elapsed);
     t.classList.toggle("done", S.solved);
@@ -116,8 +121,17 @@
   function start() {
     if (!running && !S.solved) { running = true; last = Date.now(); }
   }
-  setInterval(() => { tick(true); if (running) save(); }, 1000);
-  document.addEventListener("visibilitychange", () => { last = Date.now(); });
+  setInterval(() => {
+    if (document.hidden) return; // paused: hiding already banked the time
+    accrue(); showTime(); if (running) save();
+  }, 1000);
+  // Pause while the page is hidden: bank the time up to hiding, then restart
+  // the count from when it's shown again.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { accrue(); if (running) save(); }
+    else last = Date.now();
+  });
+  addEventListener("pagehide", () => { if (!document.hidden) accrue(); if (running) save(); });
 
   // ---------- editing ----------
   function select(i, d) {
@@ -134,10 +148,13 @@
     const cells = D.clues[k].cells, p = cells.indexOf(cur) + delta;
     if (p >= 0 && p < cells.length) cur = cells[p];
   }
+  // A solved grid is locked: typing and erasing do nothing until Clear.
+  function unreveal(i) { S.revealed = S.revealed.filter((j) => j !== i); }
   function type(ch) {
     if (S.solved || !open(cur)) return;
     start();
     S.letters[cur] = ch.toUpperCase();
+    unreveal(cur); // the solver's own letter now, not a revealed one
     wrong.delete(cur);
     step(1);
     save();
@@ -147,7 +164,8 @@
   function erase() {
     if (S.solved) return;
     if (!S.letters[cur]) step(-1);
-    if (!S.revealed.includes(cur)) S.letters[cur] = "";
+    S.letters[cur] = "";
+    unreveal(cur);
     wrong.delete(cur);
     save();
     render();
@@ -199,16 +217,31 @@
     render();
     checkSolved();
   }
+  // Clear keeps revealed letters. After a solve it's how to play again:
+  // - Clear grid starts afresh: every letter, revealed or not, the timer and
+  //   the reveal count all reset, as if the puzzle had never been opened.
+  // - Clear word un-solves if it takes any letter away; the timer then
+  //   carries on from the solved time when the solver next types.
   function clear(what) {
-    if (S.solved) return;
-    for (const i of scope(what)) if (!S.revealed.includes(i)) { S.letters[i] = ""; wrong.delete(i); }
+    if (S.solved && what === "grid") {
+      S = blank();
+      wrong.clear();
+      running = false;
+      $("#solved").classList.remove("show");
+    } else {
+      let changed = false;
+      for (const i of scope(what)) {
+        if (!S.revealed.includes(i)) { changed ||= !!S.letters[i]; S.letters[i] = ""; wrong.delete(i); }
+      }
+      if (S.solved && changed) { S.solved = false; $("#solved").classList.remove("show"); }
+    }
     save();
     render();
   }
   function checkSolved() {
     if (!D.hasSolution || S.solved) return;
     if (!D.cells.every((c, i) => !open(i) || S.letters[i] === c)) return;
-    tick(true);
+    accrue();
     S.solved = true;
     running = false;
     save();
@@ -325,17 +358,29 @@
   });
   $("#print").addEventListener("click", () => window.print());
   $("#solved button").addEventListener("click", () => $("#solved").classList.remove("show"));
+  // Mobile keyboards often send keydown "Unidentified", so letters arrive
+  // here. The input holds one space so Backspace always has something to
+  // delete and fires beforeinput. Backspace in this input, from any
+  // keyboard, is handled only there (keydown lets it through), so it can
+  // never erase twice.
+  const SPACER = " ";
+  function resetKeys() { keys.value = SPACER; keys.setSelectionRange(1, 1); }
+  keys.addEventListener("beforeinput", (e) => {
+    if (e.inputType === "deleteContentBackward") { e.preventDefault(); erase(); }
+  });
   keys.addEventListener("input", () => {
     const v = keys.value.replace(/[^A-Za-z]/g, "");
-    keys.value = "";
+    resetKeys();
     if (v) type(v[v.length - 1]);
   });
+  keys.addEventListener("focus", resetKeys);
   document.addEventListener("keydown", (e) => {
     if (e.target.closest && e.target.closest(".helper")) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "Escape") { $("#solved").classList.remove("show"); return; }
     if (e.target !== keys && e.target !== document.body) return;
     if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); type(e.key); }
+    else if (e.key === "Backspace" && e.target === keys) resetKeys(); // erased in beforeinput
     else if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); erase(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); move(0, -1); }
     else if (e.key === "ArrowRight") { e.preventDefault(); move(0, 1); }
@@ -347,7 +392,7 @@
 
   if (!D.hasSolution) document.querySelectorAll("[data-needs-solution]").forEach((el) => (el.hidden = true));
   render();
-  if (S.solved) document.querySelectorAll(".clue .anno").forEach((a) => (a.hidden = false));
+  resetKeys();
   keys.focus({ preventScroll: true });
   window.setterPlayer = { type, reveal, check, clear, select, state: () => S };
 })();

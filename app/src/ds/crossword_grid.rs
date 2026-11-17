@@ -36,6 +36,8 @@ pub enum GridKey {
     /// Put this capital letter in the square.
     Letter(char),
     Backspace,
+    /// Clear the square, staying on it.
+    Delete,
     /// Move by (rows, columns).
     Move(i32, i32),
     /// Switch between across and down.
@@ -56,6 +58,7 @@ pub fn grid_key(key: &str, shift: bool) -> Option<GridKey> {
     }
     Some(match key {
         "Backspace" => GridKey::Backspace,
+        "Delete" => GridKey::Delete,
         "ArrowLeft" => GridKey::Move(0, -1),
         "ArrowRight" => GridKey::Move(0, 1),
         "ArrowUp" => GridKey::Move(-1, 0),
@@ -146,6 +149,7 @@ mod tests {
         assert_eq!(grid_key("a", false), Some(GridKey::Letter('A')));
         assert_eq!(grid_key("Q", true), Some(GridKey::Letter('Q')));
         assert_eq!(grid_key("Backspace", false), Some(GridKey::Backspace));
+        assert_eq!(grid_key("Delete", false), Some(GridKey::Delete));
         assert_eq!(grid_key("ArrowLeft", false), Some(GridKey::Move(0, -1)));
         assert_eq!(grid_key("ArrowRight", false), Some(GridKey::Move(0, 1)));
         assert_eq!(grid_key("ArrowUp", false), Some(GridKey::Move(-1, 0)));

@@ -103,6 +103,17 @@ fn App() -> Element {
         files::load_settings()
     });
     shell::use_startup(state);
+    // The last second of work is written before the window goes.
+    dioxus::desktop::use_wry_event_handler(move |event, _| {
+        use dioxus::desktop::tao::event::{Event, WindowEvent};
+        if let Event::WindowEvent {
+            event: WindowEvent::CloseRequested | WindowEvent::Destroyed,
+            ..
+        } = event
+        {
+            let _ = shell::write_autosave_now(state);
+        }
+    });
     rsx! {
         Styles {}
         shell::Shell {}

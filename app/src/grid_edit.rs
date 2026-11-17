@@ -98,6 +98,12 @@ pub fn backspace(p: &mut Puzzle, c: Cursor) -> Cursor {
     c
 }
 
+/// Clear the selected square and stay on it.
+pub fn delete(p: &mut Puzzle, c: Cursor) -> Cursor {
+    p.grid.cells[c.cell].letter = None;
+    c
+}
+
 /// Move with the arrow keys, skipping blocks; the axis sets the direction.
 pub fn arrow(grid: &Grid, c: Cursor, dr: i32, dc: i32) -> Cursor {
     let dir = if dr != 0 { Dir::Down } else { Dir::Across };
@@ -296,6 +302,16 @@ mod tests {
         assert_eq!(p.grid.pattern(down), "x??");
         let end = type_letter(&mut p, across(2), 'y');
         assert_eq!(end.cell, 2, "stays on the last square");
+    }
+
+    #[test]
+    fn delete_clears_the_square_and_stays() {
+        let mut p = puzzle(&["...", ".#.", "..."]);
+        p.grid.cells[1].letter = Some('A');
+        assert_eq!(delete(&mut p, across(1)), across(1));
+        assert_eq!(p.grid.cells[1].letter, None);
+        // An empty square: nothing moves.
+        assert_eq!(delete(&mut p, across(1)), across(1));
     }
 
     #[test]

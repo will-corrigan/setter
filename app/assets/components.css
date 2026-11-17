@@ -169,6 +169,11 @@ button, input, textarea { font: inherit; color: inherit; }
 .w[data-tone="def"] { background: none; text-decoration: underline; text-decoration-thickness: var(--underline-thick); text-underline-offset: var(--underline-offset); }
 .w[data-tone="ind"] { background: none; text-decoration: underline dotted; text-underline-offset: var(--underline-offset); }
 
+/* ---------- the clue's explanation ---------- */
+.clue-note { grid-column: 1 / -1; display: flex; align-items: baseline; gap: var(--space-2); font-size: var(--text-sm); min-width: 0; }
+.clue-note__label { color: var(--muted); }
+.clue-note .inline-edit { max-width: none; min-width: 0; }
+
 /* ---------- reads-as line + checks ---------- */
 .reads-as { grid-column: 1 / -1; display: flex; gap: var(--space-3); flex-wrap: wrap; font-size: var(--text-sm); color: var(--muted); }
 .check { color: var(--def); }

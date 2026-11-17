@@ -217,7 +217,19 @@ pub fn load(path: &Path) -> Result<Puzzle, String> {
 /// Write a `.xword` puzzle file (pretty JSON).
 pub fn save(path: &Path, p: &Puzzle) -> Result<(), String> {
     let s = serde_json::to_string_pretty(p).map_err(|e| e.to_string())?;
-    fs::write(path, s).map_err(|e| format!("Couldn't save {}: {e}", path.display()))
+    write_whole(path, s.as_bytes()).map_err(|e| format!("Couldn't save {}: {e}", path.display()))
+}
+
+/// Write a file so that a crash part-way leaves the old one intact: write a
+/// temporary file beside it, then rename it into place.
+pub fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".saving");
+    let tmp = PathBuf::from(tmp);
+    fs::write(&tmp, bytes)?;
+    fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })
 }
 
 /// The British 15×15 template used for sample puzzles.
@@ -355,4 +367,21 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn saving_replaces_the_file_whole() {
+        let d = std::env::temp_dir().join(format!("setter-whole-{}", std::process::id()));
+        fs::create_dir_all(&d).unwrap();
+        let path = d.join("p.xword");
+        fs::write(&path, "old").unwrap();
+        let mut p = Puzzle::new(3, 3);
+        p.title = "New".into();
+        save(&path, &p).unwrap();
+        assert_eq!(load(&path).unwrap().title, "New");
+        // Nothing left over beside it.
+        let names: Vec<_> = fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(names, vec![std::ffi::OsString::from("p.xword")]);
+        let _ = fs::remove_dir_all(&d);
+    }
+
 }

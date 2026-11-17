@@ -61,7 +61,7 @@ button, input { font: inherit; color: inherit; }
 .cell.bar-b .br-b { position: absolute; bottom: -3px; left: -1px; right: -1px; height: 4px; background: var(--grid-block); z-index: 2; }
 .cell.hy-r .br-r { position: absolute; right: -6px; top: calc(50% - 2px); width: 11px; height: 4px; background: var(--grid-block); z-index: 2; border-radius: 2px; }
 .cell.hy-b .br-b { position: absolute; bottom: -6px; left: calc(50% - 2px); width: 4px; height: 11px; background: var(--grid-block); z-index: 2; border-radius: 2px; }
-.keys { position: absolute; opacity: 0; width: 1px; height: 1px; left: 0; top: 0; border: 0; padding: 0; }
+.keys { position: absolute; opacity: 0; width: 1px; height: 1px; left: 0; top: 0; border: 0; padding: 0; font-size: 16px; /* 16px or more stops iOS zooming in on focus */ }
 .progress { color: var(--muted); font-size: 13px; }
 
 .clues { display: grid; grid-template-columns: 1fr 1fr; gap: 0 26px; align-items: start; }

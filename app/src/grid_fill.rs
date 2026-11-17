@@ -142,9 +142,43 @@ pub fn shapes(p: &Puzzle) -> HashMap<String, Shape> {
 }
 
 /// The words that fit an answer: safe for its crossings, of the wanted
-/// shape, and starting with the letters typed in the search box.
+/// shape, starting with the letters typed in the search box, and not
+/// already used elsewhere in the grid.
 #[allow(clippy::too_many_arguments)]
 pub fn suggest(
+    lex: &Lexicon,
+    index: &FillIndex,
+    grid: &Grid,
+    light_id: &str,
+    split: &str,
+    words: WordCount,
+    prefix: &str,
+    limit: usize,
+) -> Vec<Suggestion> {
+    let used: HashSet<String> = grid
+        .lights()
+        .iter()
+        .filter(|l| l.id != light_id)
+        .map(|l| grid.pattern(l).to_lowercase())
+        .filter(|p| !p.contains('?'))
+        .collect();
+    let mut found = suggest_any(
+        lex,
+        index,
+        grid,
+        light_id,
+        split,
+        words,
+        prefix,
+        limit + used.len(),
+    );
+    found.retain(|s| !used.contains(&s.key));
+    found.truncate(limit);
+    found
+}
+
+#[allow(clippy::too_many_arguments)]
+fn suggest_any(
     lex: &Lexicon,
     index: &FillIndex,
     grid: &Grid,
@@ -471,6 +505,19 @@ mod tests {
     }
 
     // ---------- the words that fit ----------
+
+    #[test]
+    fn words_already_in_the_grid_are_not_offered_again() {
+        let e = engine();
+        // Two separate three-letter answers: CAT along the top, the bottom open.
+        let p = puzzle(&["cat", "###", "..."]);
+        let open = suggest(&e.lex, e.fill(), &p.grid, "2,0,a", "", WordCount::Any, "ca", 40);
+        assert!(!open.is_empty());
+        assert!(open.iter().all(|s| s.key != "cat"), "{open:?}");
+        // An answer's own word is still listed for it.
+        let own = suggest(&e.lex, e.fill(), &p.grid, "0,0,a", "", WordCount::Any, "ca", 40);
+        assert!(own.iter().any(|s| s.key == "cat"), "{own:?}");
+    }
 
     #[test]
     fn suggestions_follow_the_split_the_chips_and_the_search() {
