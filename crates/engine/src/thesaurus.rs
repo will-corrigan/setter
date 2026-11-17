@@ -437,6 +437,20 @@ mod tests {
     }
 
     #[test]
+    fn british_variants_use_their_plain_form() {
+        for (word, base) in [("whilst", "while"), ("amongst", "among")] {
+            let g = th().meanings(word, 80);
+            assert!(!g.is_empty(), "{word}: nothing");
+            assert!(
+                g.iter().all(|(t, _)| t.ends_with(base)),
+                "{word}: {:?}",
+                g.iter().map(|(t, _)| t).collect::<Vec<_>>()
+            );
+        }
+        assert!(flat(&th().meanings("whilst", 80)).contains(&"although"));
+    }
+
+    #[test]
     fn an_entry_with_nothing_to_offer_falls_back_too() {
         // WordNet lists "directed" only as an adjective with no other words.
         let g = th().meanings("directed", 80);

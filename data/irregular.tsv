@@ -1,6 +1,7 @@
-# Irregular English forms and their base words (form<TAB>base), so the thesaurus
-# can define "knew" by "know" and "feet" by "foot". Hand-written for Setter.
+# Irregular English forms and variants and their base words (form<TAB>base), so the
+# thesaurus can define "knew" by "know", "feet" by "foot" and "whilst" by "while". Hand-written for Setter.
 am	be
+amongst	among
 analyses	analysis
 appendices	appendix
 are	be
@@ -228,6 +229,7 @@ was	be
 went	go
 wept	weep
 were	be
+whilst	while
 wives	wife
 woke	wake
 woken	wake
