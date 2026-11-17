@@ -13,7 +13,7 @@ serde_json.workspace = true
 rfd = "0.15"
 dirs = "6"
 tokio = { version = "1", features = ["time", "rt"] }
-dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", rev = "9a758255ea26e2b20c8cecf4c1c946feb9e71da7", version = "0.0.1", default-features = false }
 dioxus-icons = { version = "0.1.0", default-features = false }
 
 [dev-dependencies]
