@@ -2,8 +2,8 @@
 
 use xw_engine::bank::Tone;
 
-/// Word tokens: (byte start, byte end, lowercase text). Letters only, so
-/// "Artist's" gives "artist" and "s", and "(9)" gives nothing.
+/// Word tokens: (byte start, byte end, lowercase text). Letters and digits,
+/// so "Artist's" gives "artist" and "s", and "(9)" gives "9".
 fn tokens(text: &str) -> Vec<(usize, usize, String)> {
     let mut out = vec![];
     let mut start = None;
@@ -11,7 +11,7 @@ fn tokens(text: &str) -> Vec<(usize, usize, String)> {
         .char_indices()
         .chain(std::iter::once((text.len(), ' ')))
     {
-        match (c.is_alphabetic(), start) {
+        match (c.is_alphanumeric(), start) {
             (true, None) => start = Some(i),
             (false, Some(s)) => {
                 out.push((s, i, text[s..i].to_lowercase()));
@@ -23,45 +23,63 @@ fn tokens(text: &str) -> Vec<(usize, usize, String)> {
     out
 }
 
-fn words(pick: &str) -> Vec<String> {
-    tokens(pick).into_iter().map(|t| t.2).collect()
+/// A picked word or phrase: its tokens and the exact separators between them
+/// ("King's Counsel" → [king, s, counsel] with ["'", " "]).
+struct Pick {
+    words: Vec<String>,
+    seps: Vec<String>,
 }
 
-/// Does `pick` (one or more words) match the tokens starting at `i`, with only
-/// whitespace between them? Returns the byte range covered.
+fn pick_of(p: &str) -> Pick {
+    let toks = tokens(p);
+    Pick {
+        seps: toks
+            .windows(2)
+            .map(|w| p[w[0].1..w[1].0].to_string())
+            .collect(),
+        words: toks.into_iter().map(|t| t.2).collect(),
+    }
+}
+
+/// Text between two tokens matches a pick's separator: any whitespace for a
+/// space, otherwise exactly ("-", "'").
+fn same_sep(text_sep: &str, pick_sep: &str) -> bool {
+    if pick_sep.trim().is_empty() {
+        !text_sep.is_empty() && text_sep.chars().all(char::is_whitespace)
+    } else {
+        text_sep == pick_sep
+    }
+}
+
+/// Does `pick` match the tokens starting at `i`, with the same separators?
+/// Returns the byte range covered.
 fn match_at(
     text: &str,
     toks: &[(usize, usize, String)],
     i: usize,
-    pick: &[String],
+    pick: &Pick,
 ) -> Option<(usize, usize)> {
-    if pick.is_empty() || i + pick.len() > toks.len() {
+    let n = pick.words.len();
+    if n == 0 || i + n > toks.len() {
         return None;
     }
-    for (k, w) in pick.iter().enumerate() {
+    for (k, w) in pick.words.iter().enumerate() {
         let t = &toks[i + k];
-        if &t.2 != w {
-            return None;
-        }
-        if k > 0
-            && !text[toks[i + k - 1].1..t.0]
-                .chars()
-                .all(char::is_whitespace)
-        {
+        if &t.2 != w || (k > 0 && !same_sep(&text[toks[i + k - 1].1..t.0], &pick.seps[k - 1])) {
             return None;
         }
     }
-    Some((toks[i].0, toks[i + pick.len() - 1].1))
+    Some((toks[i].0, toks[i + n - 1].1))
 }
 
 /// Split `text` into spans, colouring whole-word (or whole-phrase) matches of
 /// each pick. Earlier picks win. The span texts concatenate back to `text`.
 pub fn spans(text: &str, picks: &[(String, Tone)]) -> Vec<(String, Option<Tone>)> {
     let toks = tokens(text);
-    let picks: Vec<(Vec<String>, Tone)> = picks
+    let picks: Vec<(Pick, Tone)> = picks
         .iter()
-        .map(|(p, t)| (words(p), *t))
-        .filter(|(w, _)| !w.is_empty())
+        .map(|(p, t)| (pick_of(p), *t))
+        .filter(|(w, _)| !w.words.is_empty())
         .collect();
     let mut out: Vec<(String, Option<Tone>)> = vec![];
     let mut push = |s: &str, tone: Option<Tone>| {
@@ -77,7 +95,7 @@ pub fn spans(text: &str, picks: &[(String, Tone)]) -> Vec<(String, Option<Tone>)
     while i < toks.len() {
         let hit = picks
             .iter()
-            .find_map(|(w, tone)| match_at(text, &toks, i, w).map(|r| (r, w.len(), *tone)));
+            .find_map(|(w, tone)| match_at(text, &toks, i, w).map(|r| (r, w.words.len(), *tone)));
         if let Some(((a, b), n, tone)) = hit {
             push(&text[pos..a], None);
             push(&text[a..b], Some(tone));
@@ -99,18 +117,35 @@ pub struct Checks {
     pub definition_at_end: bool,
 }
 
+/// The clue without a trailing enumeration such as "(9)" or "(5,3)".
+fn without_enumeration(text: &str) -> &str {
+    let t = text.trim_end();
+    if let Some(open) = t.rfind('(') {
+        let inner = &t[open + 1..];
+        if inner.ends_with(')')
+            && inner[..inner.len() - 1]
+                .chars()
+                .all(|c| c.is_ascii_digit() || ",- ".contains(c))
+        {
+            return &t[..open];
+        }
+    }
+    text
+}
+
 pub fn checks(text: &str, parts: &[(String, Tone)], definition: Option<&str>) -> Checks {
+    let text = without_enumeration(text);
     let toks = tokens(text);
     let found = |pick: &str| {
-        let w = words(pick);
+        let w = pick_of(pick);
         (0..toks.len()).any(|i| match_at(text, &toks, i, &w).is_some())
     };
     let adds_up = !parts.is_empty() && parts.iter().all(|(p, _)| found(p));
-    let definition_at_end = definition.map(words).is_some_and(|d| {
-        !d.is_empty()
-            && d.len() <= toks.len()
+    let definition_at_end = definition.map(pick_of).is_some_and(|d| {
+        !d.words.is_empty()
+            && d.words.len() <= toks.len()
             && (match_at(text, &toks, 0, &d).is_some()
-                || match_at(text, &toks, toks.len() - d.len(), &d).is_some())
+                || match_at(text, &toks, toks.len() - d.words.len(), &d).is_some())
     });
     Checks {
         adds_up,
@@ -172,6 +207,33 @@ mod tests {
             .adds_up
         );
         assert!(!checks("Gold band box artist", &parts, Some("band")).definition_at_end);
+    }
+
+    #[test]
+    fn hyphen_apostrophe_and_digit_picks_colour() {
+        let picks = [
+            ("first-class".to_string(), Tone::P1),
+            ("King's Counsel".to_string(), Tone::P2),
+            ("500".to_string(), Tone::P3),
+        ];
+        let s = spans("A first-class King's Counsel and 500 men", &picks);
+        assert!(s.contains(&("first-class".into(), Some(Tone::P1))), "{s:?}");
+        assert!(
+            s.contains(&("King's Counsel".into(), Some(Tone::P2))),
+            "{s:?}"
+        );
+        assert!(s.contains(&("500".into(), Some(Tone::P3))), "{s:?}");
+        assert!(spans("first class", &picks[..1])
+            .iter()
+            .all(|x| x.1.is_none()));
+        assert!(
+            checks(
+                "A first-class lot of 500",
+                &[picks[0].clone(), picks[2].clone()],
+                None
+            )
+            .adds_up
+        );
     }
 
     #[test]
