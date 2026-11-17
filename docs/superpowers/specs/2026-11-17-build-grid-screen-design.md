@@ -85,6 +85,16 @@ and get words that fit the letters already in place on demand.
   - "no repeats", or the repeats
   - British checking rules met, or what's wrong
 
+## Your own words (user, 2026-11-17)
+
+- Any letters can be typed, in or out of the dictionary, and the split box
+  works on any answer.
+- An answer that isn't in the word list is named in the status line, with an
+  **Add to my words** action. It appends the answer to the user's `words.txt`,
+  shaped by its split (e.g. "zob rist" for (3,4)), and reloads the word list.
+  The word then counts as a word everywhere: status, suggestions and autofill.
+- "Fill the rest" never changes letters already in the grid.
+
 ## Engine
 
 - Use the existing `xw_engine::fill`:

@@ -188,6 +188,12 @@ Mockup: `docs/design/build-grid-mockup.html`.
     `[(cells[3], Word)]` and "3-4" → `[(cells[2], Hyphen)]`. An invalid or
     plain split gives `[]`. The grid component draws a right-edge bar for
     across lights and a bottom-edge bar for down lights.
+  - `pub fn display_with_split(letters: &str, enumeration: &str) -> String`:
+    "zobrist" with "3,4" gives "zob rist", with "3-4" gives "zob-rist", and
+    with "7" or an invalid split gives "zobrist".
+  - In `files.rs`: `pub fn add_own_word(text: &str) -> Result<(), String>` and
+    `add_own_word_in(dir, text)`. They append a line to `words.txt` without
+    duplicates; the caller then reloads the engine data.
   - `history.rs`: `pub struct History<T> { .. }` with `new(cap)`,
     `push(&mut self, before: T)`, `undo(&mut self, current: T) -> Option<T>`,
     `redo(&mut self, current: T) -> Option<T>`. Capacity 200. A push clears
@@ -202,6 +208,10 @@ Mockup: `docs/design/build-grid-mockup.html`.
   - Undo, redo and the capacity cap.
   - `word_breaks` for "4,5", "2,1,3", "3-4", "9" and "4,4" (the last two give
     `[]`).
+  - `display_with_split` cases as above.
+  - `add_own_word_in` on a temp dir: added once even if called twice. After
+    `load_engine_data_from(dir)` the word is in the lexicon and `grid_status`
+    no longer lists it in `non_words`.
 - [ ] **Step 2:** Run `cargo test -p setter grid_edit history`. Expected: FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run `cargo test --workspace`. Expected: PASS.
@@ -228,6 +238,9 @@ interfaces:
 - `grid_status` for the status line,
 - `safe_suggestions` for the panel (limit 120, filtered by the search box
   prefix),
+- An **Add to my words** action next to each status `non_words` entry. It uses
+  `display_with_split` and `add_own_word`, reloads the engine data off the UI
+  thread, then recomputes status and suggestions.
 - `autofill_shaped` for "Fill the rest" and for "Fill just this answer"
   (only that light open),
 - `grid_edit` and `History` for editing.
