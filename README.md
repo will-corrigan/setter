@@ -10,6 +10,21 @@ indicators are all built in.
 
 ## What's in it
 
+- **Build grid**:
+  - **New puzzle** offers six standard British grids (15×15 and 13×13).
+  - Click a square and type. Space switches direction; Tab moves to the next answer.
+  - Right-click or Ctrl+Space shows the words that fit, filtered by how many words
+    the answer splits into. The wand fills just that answer; the eraser clears it.
+  - Type a split such as `(4,5)` or `(3-4)` beside the answer. Bars and hyphens
+    show in the grid, and fills respect them.
+  - **Fill the rest** autofills every empty square, keeping your letters. It can be
+    stopped.
+  - The line under the grid flags non-words, repeats, unfillable answers and British
+    checking rules. A word that isn't in the list can be added to your words.
+  - Undo and Redo, also Ctrl+Z and Ctrl+Shift+Z.
+  - The clue list on the right shows which answers still need a clue.
+  - Click the title or setter in the top bar to edit them. The setter's name is
+    remembered for new puzzles.
 - **Write clues**:
   - A device list with live counts for each answer. Thirteen devices: alternate letters,
     anagram, change a letter, charade, container, deletion, first letters, hidden,
@@ -30,8 +45,18 @@ indicators are all built in.
     tokens.
   - Light and dark modes.
   - See every component with `setter --gallery`.
-- **Build grid**: designed next. For now **New sample** gives you an autofilled
-  15×15 British grid to clue.
+- **Saving and sharing**:
+  - **Save** writes a `.xword` file (Ctrl+S).
+  - Work is autosaved a second after each change and recovered if Setter closes
+    before you save.
+  - **Export** writes:
+    - a **web page** (`.html`): one self-contained file anyone can open in a
+      browser to solve. It has check and reveal by letter, word or grid, a timer,
+      an anagram helper, confetti and the solve time when finished, saved
+      progress, print and a phone layout. Once solved, each clue shows how it
+      works, written from the words you picked in the word bank.
+    - **Across Lite** (`.puz`), once every square is filled.
+    - **ipuz** (`.ipuz`).
 
 ## Developing (NixOS / WSL)
 
@@ -44,8 +69,10 @@ cd app && dx serve --platform desktop      # run with live reload
 dx serve --platform desktop -- --gallery   # the component gallery
 ```
 
-Always build and run the app through `dx`, not plain `cargo run`. The bundled fonts
-and stylesheets only load under `dx`.
+Always build the app through `dx`, not plain `cargo run`. The bundled fonts and
+stylesheets only load under `dx`. Under WSLg, run the built binary inside the dev
+shell (`nix develop --command target/dx/setter/debug/linux/app/setter`). Outside it,
+WebKitGTK renders a broken page.
 
 Dev-only hooks, for screenshots and driving the app in WSLg, where synthetic input
 doesn't reach windows:
