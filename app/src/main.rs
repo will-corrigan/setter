@@ -2,6 +2,7 @@
 
 mod answers;
 mod files;
+mod highlight;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
