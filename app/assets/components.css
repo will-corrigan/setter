@@ -147,23 +147,34 @@ button, input, textarea { font: inherit; color: inherit; }
 .word-column__item[aria-selected="true"] mark { background: transparent; color: inherit; }
 .word-column__empty { padding: var(--space-2) var(--space-3); color: var(--muted); font-size: var(--text-sm); }
 
-/* ---------- clue field (highlighting textarea) ---------- */
-.clue-field { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1-5) var(--space-4); align-items: center; }
-.clue-field__box { position: relative; }
-.clue-field__mirror, .clue-field__input {
-  margin: 0; padding: var(--space-2-5) var(--space-3-5); border-radius: var(--radius-m);
+/* ---------- clue field: free text with draggable coloured pieces ---------- */
+.clue-field { position: relative; display: grid; grid-template-columns: 1fr auto; gap: var(--space-1-5) var(--space-4); align-items: center; }
+.clue-field__editor {
+  margin: 0; padding: var(--space-2-5) var(--space-3-5); min-height: 3.2em;
+  font-family: var(--font-serif); font-size: var(--text-xl); line-height: var(--leading-loose); color: var(--text);
+  white-space: pre-wrap; overflow-wrap: break-word; cursor: text;
+  background: var(--raised); border: var(--border-strong) solid var(--line-strong); border-radius: var(--radius-m);
+  outline: none; caret-color: var(--text);
+}
+.clue-field__editor:focus { border-color: var(--text); }
+.clue-field__editor:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+/* The editor's script talks to Rust through these; they are never seen. */
+.clue-field__sink, .clue-field__arrange { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.clue-chip {
+  border-radius: var(--radius-xs); background: var(--tone-bg); color: var(--tone);
+  padding: 0 var(--space-half); cursor: default; user-select: none;
+}
+.clue-chip[data-tone="def"] { text-decoration: underline; text-decoration-thickness: var(--underline-thick); text-underline-offset: var(--underline-offset); }
+.clue-chip[data-tone="ind"] { text-decoration: underline dotted; text-underline-offset: var(--underline-offset); }
+.clue-chip.is-dragging { opacity: var(--dragging-opacity); }
+.clue-chip--ghost {
+  position: fixed; z-index: 20; pointer-events: none; box-shadow: var(--shadow-2);
   font-family: var(--font-serif); font-size: var(--text-xl); line-height: var(--leading-loose);
-  white-space: pre-wrap; overflow-wrap: break-word; min-height: 3.2em;
 }
-.clue-field__mirror { border: var(--border-strong) solid transparent; color: var(--text); pointer-events: none; }
-.clue-field__input {
-  position: absolute; inset: 0; width: 100%; height: 100%; resize: none;
-  border: var(--border-strong) solid var(--line-strong); background: transparent;
-  color: transparent; caret-color: var(--text);
+.clue-drop {
+  display: inline-block; width: var(--border-strong); height: 1.2em; margin: 0 var(--space-half);
+  vertical-align: text-bottom; background: var(--text); border-radius: var(--radius-2xs);
 }
-.clue-field__input:focus { outline: none; border-color: var(--text); }
-.clue-field__input::placeholder { color: var(--faint); }
-.clue-field__box { background: var(--raised); border-radius: var(--radius-m); }
 .clue-field__enum { font-family: var(--font-serif); font-size: var(--text-xl); color: var(--muted); }
 .w { border-radius: var(--radius-xs); background: var(--tone-bg); color: var(--tone); }
 .w[data-tone="def"] { background: none; text-decoration: underline; text-decoration-thickness: var(--underline-thick); text-underline-offset: var(--underline-offset); }
@@ -389,6 +400,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .write-clues > .word-bank { flex: 1; min-height: calc(var(--column-min) * 2); }
 /* Tiles, then the option pills, on one row. */
 .clue-head { display: flex; align-items: center; gap: var(--space-2) var(--space-4); flex-wrap: wrap; }
+.clue-head__definition { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); }
+.clue-head__label { color: var(--muted); font-size: var(--text-sm); }
 /* Build grid: the grid on the left, the clue sheet in the room that is left. */
 .build-grid {
   flex: 1; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);

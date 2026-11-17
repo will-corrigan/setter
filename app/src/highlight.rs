@@ -72,6 +72,14 @@ fn match_at(
     Some((toks[i].0, toks[i + n - 1].1))
 }
 
+/// Where a picked word or phrase first appears as whole words, as a byte
+/// range: "box" is in "Gold box" but not in "boxer".
+pub fn find(text: &str, word: &str) -> Option<(usize, usize)> {
+    let pick = pick_of(word);
+    let toks = tokens(text);
+    (0..toks.len()).find_map(|i| match_at(text, &toks, i, &pick))
+}
+
 /// Split `text` into spans, colouring whole-word (or whole-phrase) matches of
 /// each pick. Earlier picks win. The span texts concatenate back to `text`.
 pub fn spans(text: &str, picks: &[(String, Tone)]) -> Vec<(String, Option<Tone>)> {

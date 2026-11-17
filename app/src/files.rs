@@ -61,13 +61,21 @@ fn read_lines(path: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Scratch space for tests and dev tools, inside the repo's `target` folder
+/// so nothing is left elsewhere.
+pub fn scratch_dir(name: &str) -> PathBuf {
+    let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/scratch")
+        .join(name);
+    let _ = fs::create_dir_all(&d);
+    d
+}
+
 /// The user's config folder: `$SETTER_CONFIG_DIR`, else `<OS config dir>/setter`.
 /// Tests get a scratch folder of their own, so they never touch the user's.
 pub fn config_dir() -> PathBuf {
     if cfg!(test) {
-        let d = std::env::temp_dir().join(format!("setter-tests-{}", std::process::id()));
-        let _ = fs::create_dir_all(&d);
-        return d;
+        return scratch_dir(&format!("config-{}", std::process::id()));
     }
     let d = std::env::var_os("SETTER_CONFIG_DIR")
         .map(PathBuf::from)
@@ -180,6 +188,9 @@ pub struct Settings {
     /// Put on new puzzles and shown in exports.
     #[serde(default)]
     pub setter_name: String,
+    /// Picked definitions go at the end of the clue, not the start.
+    #[serde(default)]
+    pub definition_last: bool,
 }
 
 /// A `<head>` script applying a saved Light/Dark theme before the first paint
@@ -273,7 +284,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("setter-test-{name}-{}", std::process::id()));
+        let d = scratch_dir(&format!("test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
@@ -376,7 +387,7 @@ mod tests {
 
     #[test]
     fn saving_replaces_the_file_whole() {
-        let d = std::env::temp_dir().join(format!("setter-whole-{}", std::process::id()));
+        let d = scratch_dir(&format!("whole-{}", std::process::id()));
         fs::create_dir_all(&d).unwrap();
         let path = d.join("p.xword");
         fs::write(&path, "old").unwrap();
@@ -394,7 +405,7 @@ mod tests {
     #[test]
     fn tests_never_use_the_user_s_config_folder() {
         let d = config_dir();
-        assert!(d.starts_with(std::env::temp_dir()), "{}", d.display());
+        assert!(d.components().any(|c| c.as_os_str() == "scratch"), "{}", d.display());
         assert!(!d.ends_with("setter"));
     }
 

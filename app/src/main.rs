@@ -3,6 +3,7 @@
 mod annotate;
 mod answers;
 mod autosave;
+mod clue_draft;
 mod components;
 mod ds;
 mod export;

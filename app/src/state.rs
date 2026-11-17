@@ -1,6 +1,7 @@
 //! Shared app state, and the pure logic behind the pages.
 
 use crate::answers::{self, Answer};
+use crate::clue_draft;
 use crate::ds::word_popover::WordEntry;
 use crate::files::{self, EngineData, Settings, Theme};
 use crate::grid_edit::{self, Cursor};
@@ -45,7 +46,7 @@ impl Engine {
     fn load() -> Engine {
         // Tests must not read or write the real config folder.
         let data = if cfg!(test) {
-            files::load_engine_data_from(&std::env::temp_dir().join("setter-test-data"))
+            files::load_engine_data_from(&crate::files::scratch_dir("test-data"))
         } else {
             files::load_engine_data()
         };
@@ -213,6 +214,23 @@ pub fn toggle_pick(picks: &mut Picks, key: PickKey, item: &str) {
     } else {
         picks.insert(key, item.to_string());
     }
+}
+
+/// One option's picks, by column.
+pub fn option_picks(
+    picks: &Picks,
+    light: &str,
+    device: DeviceKind,
+    option: usize,
+    columns: usize,
+) -> HashMap<usize, String> {
+    (0..columns)
+        .filter_map(|i| {
+            picks
+                .get(&pick_key(light, device, option, i))
+                .map(|w| (i, w.clone()))
+        })
+        .collect()
 }
 
 /// The clue's annotation from the picks in one option's columns.
@@ -384,7 +402,7 @@ pub fn shortcut_script() -> String {
         "const combos = [{}];\
          document.addEventListener('keydown', (e) => {{\
            const key = e.key.toLowerCase(), alt = e.altKey, ctrl = e.ctrlKey || e.metaKey, shift = e.shiftKey;\
-           const typing = !!(e.target.closest && e.target.closest('input, textarea'));\
+           const typing = !!(e.target.closest && e.target.closest('input, textarea, [contenteditable=true]'));\
            if (combos.some(([k, a, c, s, t]) => k === key && a === alt && c === ctrl && s === shift && (t || !typing))) {{\
              e.preventDefault();\
              dioxus.send([key, alt, ctrl, shift]);\
@@ -745,8 +763,10 @@ impl AppState {
     /// Pick or un-pick a word. The clue's explanation follows the picks in
     /// that option, unless the setter has written their own.
     pub fn toggle_pick(mut self, key: PickKey, item: &str) {
+        let old = self.picks.peek().get(&key).cloned();
         toggle_pick(&mut self.picks.write(), key.clone(), item);
-        let (light, device, option, _) = key;
+        let new = self.picks.peek().get(&key).cloned();
+        let (light, device, option, column) = key;
         let Some(shown) = self.shown() else {
             return;
         };
@@ -758,6 +778,13 @@ impl AppState {
         else {
             return;
         };
+        // The picked word goes into the clue, or out of it.
+        let picked = option_picks(&self.picks.peek(), &light, device, option, found.columns.len());
+        let order = clue_draft::order(&found.columns, self.settings.peek().definition_last);
+        let text = self.clue_field(&light, |c| c.text.clone());
+        let text = clue_draft::place(&text, &order, &picked, column, old.as_deref(), new.as_deref());
+        self.set_clue_field(&light, text, |c| &mut c.text);
+
         let note = annotation_for(&self.picks.peek(), &light, device, option, found);
         let current = self.clue_field(&light, |c| c.annotation.clone());
         let written_by_picks = self.auto_notes.peek().get(&light) == Some(&current);
@@ -765,6 +792,48 @@ impl AppState {
             self.auto_notes.write().insert(light.clone(), note.clone());
             self.set_clue_field(&light, note, |c| &mut c.annotation);
         }
+    }
+
+    /// Put picked definitions at the end of clues, or the start, and move
+    /// the one in the clue on screen.
+    pub fn set_definition_last(mut self, last: bool) {
+        if self.settings.peek().definition_last != last {
+            self.settings.write().definition_last = last;
+            files::save_settings(&self.settings.peek());
+        }
+        let Some(shown) = self.shown() else {
+            return;
+        };
+        let Some(found) = shown.option() else {
+            return;
+        };
+        let light = self.selection.peek().light.clone();
+        let picked = option_picks(&self.picks.peek(), &light, shown.device, shown.option, found.columns.len());
+        let definition = found
+            .columns
+            .iter()
+            .position(|c| c.tone == Tone::Definition)
+            .and_then(|i| picked.get(&i));
+        if let Some(def) = definition {
+            let text = self.clue_field(&light, |c| c.text.clone());
+            let moved = clue_draft::move_definition(&text, def, last, &picked);
+            self.set_clue_field(&light, moved, |c| &mut c.text);
+        }
+    }
+
+    /// The setter dragged the clue's pieces about: keep their order, and
+    /// tidy spaces and capitals.
+    pub fn arrange_clue(self, text: String) {
+        let light = self.selection.peek().light.clone();
+        let picked = self
+            .shown()
+            .and_then(|shown| {
+                shown.option().map(|o| {
+                    option_picks(&self.picks.peek(), &light, shown.device, shown.option, o.columns.len())
+                })
+            })
+            .unwrap_or_default();
+        self.set_clue_field(&light, clue_draft::arrange(&text, &picked), |c| &mut c.text);
     }
 
     pub fn clue_text(self) -> String {
@@ -1421,6 +1490,45 @@ mod tests {
             },
             |state| state.clue_note(),
         )
+    }
+
+    /// Like `with_charade`, but reports the clue text.
+    fn clue_after(act: impl FnOnce(AppState) + 'static) -> String {
+        after(
+            move |mut state| {
+                let pattern = (state.answer)().unwrap().pattern;
+                let mut charade = device(DeviceKind::Charade, 1, 1);
+                charade.options[0].columns = charade_columns();
+                state.banks.write().insert(pattern, Rc::new(vec![charade]));
+                act(state);
+            },
+            |state| state.clue_text(),
+        )
+    }
+
+    #[test]
+    fn picked_words_go_into_the_clue_and_swap_in_place() {
+        let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
+        let text = clue_after(move |state| {
+            state.toggle_pick(key(0), "gold");
+            state.toggle_pick(key(1), "box");
+            state.toggle_pick(key(3), "with");
+            state.toggle_pick(key(2), "band");
+            state.toggle_pick(key(0), "or");
+        });
+        assert_eq!(text, "Band or with box");
+    }
+
+    #[test]
+    fn the_definition_side_moves_the_clue_s_definition() {
+        let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
+        let text = clue_after(move |state| {
+            state.toggle_pick(key(0), "gold");
+            state.toggle_pick(key(2), "band");
+            state.set_definition_last(true);
+            state.toggle_pick(key(1), "box");
+        });
+        assert_eq!(text, "Gold box band");
     }
 
     #[test]

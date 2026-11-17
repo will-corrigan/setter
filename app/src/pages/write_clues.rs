@@ -93,6 +93,11 @@ fn Head() -> Element {
         .unwrap_or_default();
     let device = shown.as_ref().map(|s| s.device);
     let selected = shown.as_ref().map_or(0, |s| s.option);
+    let has_definition = shown
+        .as_ref()
+        .and_then(|s| s.option())
+        .is_some_and(|o| o.columns.iter().any(|c| c.tone == xw_engine::bank::Tone::Definition));
+    let definition_last = state.settings.read().definition_last;
     rsx! {
         div { class: "clue-head",
             Tiles { tiles }
@@ -106,6 +111,18 @@ fn Head() -> Element {
                     options: labels,
                     selected,
                     on_change: move |i| state.select_option(device, i),
+                }
+            }
+            if has_definition {
+                div { class: "clue-head__definition",
+                    span { class: "clue-head__label", "Definition" }
+                    Segmented {
+                        label: "Where the definition goes",
+                        pills: true,
+                        options: vec!["Start".to_string(), "End".to_string()],
+                        selected: usize::from(definition_last),
+                        on_change: move |i: usize| state.set_definition_last(i == 1),
+                    }
                 }
             }
         }
@@ -143,6 +160,7 @@ fn Clue() -> Element {
             picks: marks.all,
             enumeration: answer.enumeration,
             on_input: move |t| state.set_clue_text(t),
+            on_arrange: move |t| state.arrange_clue(t),
         }
         if let Some(o) = option {
             ReadsAs { text: o.reads_as.clone(), checks }
@@ -278,8 +296,8 @@ mod tests {
         // Option pills.
         assert!(html.contains(r#"data-variant="pills""#), "{html}");
         // Clue field bound to the clue, with the enumeration.
-        assert!(html.contains("clue-field__input"), "{html}");
-        assert!(html.contains(">Pet<") && html.contains("(3)"), "{html}");
+        assert!(html.contains("clue-field__editor"), "{html}");
+        assert!(html.contains(r#"value="Pet""#) && html.contains("(3)"), "{html}");
         // Reads-as line and one word column per column.
         assert!(html.contains("reads-as"), "{html}");
         assert!(html.contains("word-bank"), "{html}");
@@ -332,8 +350,10 @@ mod tests {
                 &picked,
             );
         });
+        // The editor is told which words are coloured pieces.
+        let unescaped = html.replace("&#34;", "\"");
         assert!(
-            html.contains(&format!(r#"<span class="w" data-tone="def">{word}</span>"#)),
+            unescaped.contains(&format!(r#"{{"t":"{word}","tone":"def"}}"#)),
             "{html}"
         );
         assert_eq!(html.matches(r#"aria-selected="true""#).count(), 1, "{html}");
@@ -346,7 +366,7 @@ mod tests {
         assert!(html.contains(r#"aria-busy="true""#), "{html}");
         assert_eq!(html.matches("side-nav__item").count(), 13, "{html}");
         assert_eq!(html.matches("tiles__tile").count(), 3, "{html}");
-        assert!(html.contains("clue-field__input"), "{html}");
+        assert!(html.contains("clue-field__editor"), "{html}");
         assert!(!html.contains(r#"class="word-column""#), "{html}");
         assert!(html.contains("Finding words…"), "{html}");
     }
@@ -359,7 +379,7 @@ mod tests {
         assert!(html.contains("This answer has empty squares."), "{html}");
         assert_eq!(html.matches("tiles__tile").count(), 3, "{html}");
         assert_eq!(html.matches("is-blank").count(), 1, "{html}");
-        assert!(html.contains("clue-field__input"), "{html}");
+        assert!(html.contains("clue-field__editor"), "{html}");
         assert_eq!(html.matches("is-empty").count(), 13, "{html}");
         assert!(!html.contains(r#"class="word-column""#), "{html}");
     }
@@ -379,7 +399,7 @@ mod tests {
         });
         assert!(html.contains("Nothing found for this answer."), "{html}");
         assert_eq!(html.matches("tiles__tile").count(), 3, "{html}");
-        assert!(html.contains("clue-field__input"), "{html}");
+        assert!(html.contains("clue-field__editor"), "{html}");
     }
 
     #[test]
