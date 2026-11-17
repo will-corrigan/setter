@@ -1,6 +1,5 @@
 //! Exporting the puzzle: formats, file names, and the bytes to write.
 
-#![allow(dead_code)] // wired into the top bar's Export menu
 
 use xw_engine::export::{player, puz};
 use xw_engine::puzzle::Puzzle;

@@ -1,8 +1,6 @@
 //! Autosave: every edit is kept in the config folder, and recovered on start
 //! if it's newer than the last saved file.
 
-#![allow(dead_code)] // wired into the shell
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use xw_engine::puzzle::Puzzle;
@@ -17,6 +15,34 @@ pub fn write_autosave(p: &Puzzle) -> Result<(), String> {
 
 pub fn write_autosave_in(dir: &Path, p: &Puzzle) -> Result<(), String> {
     crate::files::save(&autosave_path(dir), p)
+}
+
+/// What autosave should do now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    /// The puzzle differs from how it was last opened or saved: write it.
+    Write,
+    /// Nothing unsaved: an old autosave would only bring back stale work.
+    Remove,
+    Nothing,
+}
+
+/// Compare the puzzle on screen with how it was when last shown or saved.
+/// `pristine` is `None` when there is no clean copy, e.g. recovered work.
+pub fn step(puzzle: Option<&Puzzle>, pristine: Option<&Puzzle>) -> Step {
+    match puzzle {
+        None => Step::Nothing,
+        Some(p) if Some(p) == pristine => Step::Remove,
+        Some(_) => Step::Write,
+    }
+}
+
+pub fn remove_autosave() {
+    remove_autosave_in(&crate::files::config_dir());
+}
+
+pub fn remove_autosave_in(dir: &Path) {
+    let _ = fs::remove_file(autosave_path(dir));
 }
 
 pub fn recovery(last_file: Option<&Path>) -> Option<Puzzle> {
@@ -60,6 +86,27 @@ mod tests {
         let f = fs::File::options().write(true).open(path).unwrap();
         f.set_modified(SystemTime::now() - Duration::from_secs(secs_ago))
             .unwrap();
+    }
+
+    #[test]
+    fn writes_only_what_differs_from_the_clean_copy() {
+        let clean = Puzzle::new(3, 3);
+        let mut edited = clean.clone();
+        edited.title = "Edited".into();
+        assert_eq!(step(None, None), Step::Nothing);
+        assert_eq!(step(Some(&clean), Some(&clean)), Step::Remove);
+        assert_eq!(step(Some(&edited), Some(&clean)), Step::Write);
+        // Recovered work has no clean copy until it is saved.
+        assert_eq!(step(Some(&edited), None), Step::Write);
+    }
+
+    #[test]
+    fn removing_clears_the_autosave() {
+        let d = dir("remove");
+        write_autosave_in(&d, &Puzzle::new(3, 3)).unwrap();
+        remove_autosave_in(&d);
+        assert!(recovery_in(&d, None).is_none());
+        remove_autosave_in(&d); // nothing there: no fuss
     }
 
     #[test]

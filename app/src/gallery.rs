@@ -10,6 +10,8 @@ use crate::ds::clue_sheet::ClueSheet;
 use crate::ds::crossword_grid::{CrosswordGrid, GridKey};
 use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
+use crate::ds::inline_edit::InlineEdit;
+use crate::ds::menu_button::MenuButton;
 use crate::ds::note::Note;
 use crate::ds::notice::Notice;
 use crate::ds::prose::Prose;
@@ -243,6 +245,21 @@ fn Showcase(scope: &'static str) -> Element {
                     Button { variant: ButtonVariant::Ghost, onclick: move |_| notice.set(true), "Show the notice" }
                 }
             }
+            Section { title: "Menu button",
+                div { class: "gallery__row",
+                    MenuButton {
+                        label: "Export",
+                        items: vec!["Web page (.html)".to_string(), "Across Lite (.puz)".to_string(), "ipuz (.ipuz)".to_string()],
+                        on_pick: move |_| {},
+                    }
+                }
+            }
+            Section { title: "Inline edit",
+                div { class: "gallery__row",
+                    InlineEdit { value: "Prize puzzle 12", placeholder: "Untitled", label: "Puzzle title", on_change: move |_| {} }
+                    InlineEdit { value: "", placeholder: "Setter", label: "Setter", on_change: move |_| {} }
+                }
+            }
             Section { title: "Option pills",
                 Segmented {
                     label: "Splits",
@@ -430,6 +447,8 @@ mod tests {
             "word-popover__item",
             "clue-sheet__row",
             "template-picker__thumb",
+            "menu-button__trigger",
+            "inline-edit",
         ] {
             assert!(html.contains(class), "missing {class}");
         }

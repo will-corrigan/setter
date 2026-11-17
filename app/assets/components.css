@@ -41,6 +41,9 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .topbar__logo { font-family: var(--font-serif); font-weight: var(--weight-bold); font-size: var(--text-lg); }
 .topbar__spacer { flex: 1; }
+.topbar__details { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
+.topbar__details .inline-edit:first-child { font-family: var(--font-serif); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.topbar__details .inline-edit:not(:first-child) { color: var(--muted); }
 .note { color: var(--muted); font-size: var(--text-sm); white-space: nowrap; }
 
 /* ---------- answer navigator ---------- */
@@ -423,5 +426,5 @@ button, input, textarea { font: inherit; color: inherit; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .inline-edit:hover { border-color: var(--line); }
-.inline-edit.is-placeholder { color: var(--faint); }
+.inline-edit.is-placeholder { color: var(--muted); font-style: italic; }
 .inline-edit--input { border-color: var(--text); background: var(--surface); outline: none; }

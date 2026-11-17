@@ -215,6 +215,24 @@ pub fn toggle_pick(picks: &mut Picks, key: PickKey, item: &str) {
     }
 }
 
+/// The clue's annotation from the picks in one option's columns.
+pub fn annotation_for(
+    picks: &Picks,
+    light: &str,
+    device: DeviceKind,
+    option: usize,
+    columns: &DeviceOption,
+) -> String {
+    let picked: Vec<(usize, String)> = (0..columns.columns.len())
+        .filter_map(|i| {
+            picks
+                .get(&pick_key(light, device, option, i))
+                .map(|w| (i, w.clone()))
+        })
+        .collect();
+    crate::annotate::annotation(device, columns, &picked)
+}
+
 fn is_part(tone: Tone) -> bool {
     !matches!(tone, Tone::Definition | Tone::Indicator)
 }
@@ -435,6 +453,8 @@ pub struct BuildState {
     pub status: Signal<Option<GridStatus>>,
     /// A fill is running; the grid waits for it.
     pub working: Signal<bool>,
+    /// Set to stop the running fill.
+    pub stop: Signal<Arc<std::sync::atomic::AtomicBool>>,
     /// Goes up each time the word list is loaded again.
     pub reloads: Signal<u32>,
 }
@@ -447,6 +467,9 @@ pub struct AppState {
     pub path: Signal<Option<PathBuf>>,
     /// Edited since it was last saved or opened.
     pub dirty: Signal<bool>,
+    /// The puzzle as it was when last shown or saved; `None` for recovered
+    /// work. Autosave keeps whatever differs from it.
+    pub pristine: Signal<Option<Puzzle>>,
     pub mode: Signal<Mode>,
     pub selection: Signal<Selection>,
     pub picks: Signal<Picks>,
@@ -514,12 +537,14 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         picker_open: use_signal(|| false),
         status: use_signal(|| None),
         working: use_signal(|| false),
+        stop: use_signal(|| Arc::new(std::sync::atomic::AtomicBool::new(false))),
         reloads: use_signal(|| 0),
     };
     let state = AppState {
         puzzle,
         path: use_signal(|| None),
         dirty: use_signal(|| false),
+        pristine: use_signal(|| None),
         mode: use_signal(|| Mode::WriteClues),
         selection,
         picks: use_signal(Picks::new),
@@ -555,9 +580,56 @@ impl AppState {
         self.build.query.set(String::new());
         self.build.found.set(None);
         self.build.status.set(None);
+        self.pristine.set(Some(puzzle.clone()));
         self.puzzle.set(Some(puzzle));
         self.path.set(path);
         self.dirty.set(!saved);
+    }
+
+    /// Show work recovered from the autosave. It has no file and nothing
+    /// clean to compare with, so it stays unsaved until it is saved.
+    pub fn recover(mut self, puzzle: Puzzle) {
+        self.show(puzzle, None, false);
+        self.pristine.set(None);
+    }
+
+    /// The puzzle on screen was written to `path`.
+    pub fn saved_to(mut self, path: PathBuf) {
+        let now = self.puzzle.peek().clone();
+        self.pristine.set(now);
+        self.path.set(Some(path));
+        self.dirty.set(false);
+    }
+
+    /// A new puzzle, signed with the setter's name.
+    pub fn signed(self, mut puzzle: Puzzle) -> Puzzle {
+        puzzle.author = self.settings.peek().setter_name.clone();
+        puzzle
+    }
+
+    pub fn set_title(self, title: String) {
+        self.change_details(|p| p.title = title);
+    }
+
+    /// The setter's name, kept for new puzzles too.
+    pub fn set_setter(mut self, name: String) {
+        if self.settings.peek().setter_name != name {
+            self.settings.write().setter_name = name.clone();
+            files::save_settings(&self.settings.peek());
+        }
+        self.change_details(|p| p.author = name);
+    }
+
+    fn change_details(mut self, change: impl FnOnce(&mut Puzzle)) {
+        let Some(mut puzzle) = self.puzzle.peek().clone() else {
+            return;
+        };
+        let before = (puzzle.title.clone(), puzzle.author.clone());
+        change(&mut puzzle);
+        if (puzzle.title.clone(), puzzle.author.clone()) != before {
+            self.puzzle.set(Some(puzzle));
+            self.dirty.set(true);
+        }
     }
 
     /// Switch page, staying on the same answer.
@@ -657,8 +729,38 @@ impl AppState {
         self.selection.set(next);
     }
 
+    /// Pick or un-pick a word, and write the clue's annotation from what
+    /// is picked in that option.
     pub fn toggle_pick(mut self, key: PickKey, item: &str) {
-        toggle_pick(&mut self.picks.write(), key, item);
+        toggle_pick(&mut self.picks.write(), key.clone(), item);
+        let (light, device, option, _) = key;
+        let Some(shown) = self.shown() else {
+            return;
+        };
+        let Some(found) = shown
+            .devices
+            .iter()
+            .find(|d| d.kind == device)
+            .and_then(|d| d.options.get(option))
+        else {
+            return;
+        };
+        let note = annotation_for(&self.picks.peek(), &light, device, option, found);
+        // Nothing picked keeps what the clue had, e.g. from the file.
+        if note.is_empty() {
+            return;
+        }
+        let mut changed = false;
+        if let Some(p) = self.puzzle.write().as_mut() {
+            let clue = p.clues.entry(light).or_default();
+            if clue.annotation != note {
+                clue.annotation = note;
+                changed = true;
+            }
+        }
+        if changed && !*self.dirty.peek() {
+            self.dirty.set(true);
+        }
     }
 
     pub fn clue_text(self) -> String {
@@ -1199,5 +1301,128 @@ mod tests {
             rsx! { "{answer}|{state.clue_text()}|{dirty}" }
         });
         assert_eq!(html, "bye|Farewell|true");
+    }
+
+    #[test]
+    fn annotation_comes_from_the_option_s_picks() {
+        let option = DeviceOption {
+            label: String::new(),
+            tiles: vec![],
+            columns: charade_columns(),
+            reads_as: String::new(),
+        };
+        let mut picks = Picks::new();
+        let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
+        assert_eq!(annotation_for(&picks, "0,0,a", DeviceKind::Charade, 0, &option), "");
+        toggle_pick(&mut picks, key(0), "gold");
+        toggle_pick(&mut picks, key(1), "box");
+        toggle_pick(&mut picks, key(2), "band");
+        // Another answer's picks don't count.
+        toggle_pick(&mut picks, pick_key("2,0,a", DeviceKind::Charade, 0, 0), "art");
+        assert_eq!(
+            annotation_for(&picks, "0,0,a", DeviceKind::Charade, 0, &option),
+            "OR (gold) + CHEST (box); definition: band"
+        );
+    }
+
+    #[test]
+    fn picking_words_writes_the_clue_s_annotation() {
+        let said = after(
+            |mut state| {
+                let pattern = (state.answer)().unwrap().pattern;
+                let mut charade = device(DeviceKind::Charade, 1, 1);
+                charade.options[0].columns = charade_columns();
+                state.banks.write().insert(pattern, Rc::new(vec![charade]));
+                state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 0), "gold");
+                state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 1), "box");
+            },
+            |state| {
+                let puzzle = state.puzzle.read();
+                let clue = puzzle.as_ref().unwrap().clues.get("0,0,a").cloned();
+                format!("{}|{}", clue.unwrap_or_default().annotation, (state.dirty)())
+            },
+        );
+        assert_eq!(said, "OR (gold) + CHEST (box)|true");
+    }
+
+    #[test]
+    fn title_and_setter_are_edited_and_the_setter_remembered() {
+        let said = after(
+            |state| {
+                state.set_title("Prize 12".into());
+                state.set_setter("Quixote".into());
+            },
+            |state| {
+                let puzzle = state.puzzle.read();
+                let p = puzzle.as_ref().unwrap();
+                format!(
+                    "{}|{}|{}|{}",
+                    p.title,
+                    p.author,
+                    state.settings.read().setter_name,
+                    (state.dirty)()
+                )
+            },
+        );
+        assert_eq!(said, "Prize 12|Quixote|Quixote|true");
+    }
+
+    #[test]
+    fn fresh_puzzles_are_signed_by_the_remembered_setter() {
+        let said = after(
+            |mut state| {
+                state.settings.write().setter_name = "Quixote".into();
+                let fresh = state.signed(puzzle());
+                state.show(fresh, None, true);
+            },
+            |state| state.puzzle.read().as_ref().unwrap().author.clone(),
+        );
+        assert_eq!(said, "Quixote");
+    }
+
+    #[test]
+    fn the_clean_copy_follows_shows_saves_and_recoveries() {
+        let said = after(
+            |state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+            },
+            |state| {
+                let step = crate::autosave::step(
+                    state.puzzle.read().as_ref(),
+                    state.pristine.read().as_ref(),
+                );
+                format!("{step:?}")
+            },
+        );
+        assert_eq!(said, "Write");
+        let shown = after(|_| {}, |state| {
+            format!("{:?}", crate::autosave::step(state.puzzle.read().as_ref(), state.pristine.read().as_ref()))
+        });
+        assert_eq!(shown, "Remove");
+        let saved = after(
+            |state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+                state.saved_to("/tmp/x.xword".into());
+            },
+            |state| {
+                format!(
+                    "{:?} {}",
+                    crate::autosave::step(state.puzzle.read().as_ref(), state.pristine.read().as_ref()),
+                    (state.dirty)()
+                )
+            },
+        );
+        assert_eq!(saved, "Remove false");
+        let recovered = after(
+            |state| state.recover(puzzle()),
+            |state| {
+                format!(
+                    "{:?} {}",
+                    crate::autosave::step(state.puzzle.read().as_ref(), state.pristine.read().as_ref()),
+                    (state.dirty)()
+                )
+            },
+        );
+        assert_eq!(recovered, "Write true");
     }
 }

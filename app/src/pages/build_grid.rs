@@ -15,7 +15,8 @@ use crate::grid_fill;
 use crate::grid_view::{self, Room};
 use crate::state::{self, AppState, Found, Mode};
 use dioxus::prelude::*;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use xw_engine::fill::WordCount;
 use xw_engine::grid::{Grid, Light};
 use xw_engine::puzzle::Puzzle;
@@ -252,17 +253,34 @@ fn take_fill(state: AppState, filled: &Puzzle) {
     state.edit(|p| grid_fill::restore(p, &grid_fill::snapshot(filled, cursor)));
 }
 
-/// Run a fill off the UI thread. The grid waits until it is done; if it
-/// fails, nothing changes and the notice says why.
+/// What the notice says when a fill fails: nothing if it was stopped on
+/// purpose.
+pub fn fill_notice(why: String, stopped: bool) -> Option<String> {
+    (!stopped).then_some(why)
+}
+
+/// Stop the fill that is running, leaving the grid as it was.
+pub fn stop_fill(state: AppState) {
+    state.build.stop.peek().store(true, Ordering::Relaxed);
+}
+
+/// Run a fill off the UI thread. The grid waits until it is done or
+/// stopped; if it fails, nothing changes and the notice says why.
 async fn run_fill(
     mut state: AppState,
-    fill: impl FnOnce(&state::Engine, &Puzzle) -> Result<Puzzle, String> + Send + 'static,
+    fill: impl FnOnce(&state::Engine, &Puzzle, &AtomicBool) -> Result<Puzzle, String>
+        + Send
+        + 'static,
 ) -> bool {
     let Some(puzzle) = state.puzzle.peek().clone() else {
         return false;
     };
+    let stop = Arc::new(AtomicBool::new(false));
+    state.build.stop.set(stop.clone());
     state.build.working.set(true);
-    let done = tokio::task::spawn_blocking(move || fill(&state::engine(), &puzzle)).await;
+    let flag = stop.clone();
+    let done =
+        tokio::task::spawn_blocking(move || fill(&state::engine(), &puzzle, &flag)).await;
     state.build.working.set(false);
     match done {
         Ok(Ok(filled)) => {
@@ -270,7 +288,10 @@ async fn run_fill(
             true
         }
         Ok(Err(why)) => {
-            state.notice.set(Some(why));
+            let stopped = stop.load(Ordering::Relaxed);
+            if let Some(line) = fill_notice(why, stopped) {
+                state.notice.set(Some(line));
+            }
             false
         }
         Err(_) => {
@@ -286,13 +307,13 @@ pub async fn fill_rest(state: AppState) {
         return;
     }
     close_words(state);
-    run_fill(state, |engine, puzzle| {
+    run_fill(state, |engine, puzzle, stop| {
         grid_fill::fill_rest(
             &engine.lex,
             engine.fill(),
             puzzle,
             grid_fill::FILL_TIME,
-            &AtomicBool::new(false),
+            stop,
         )
     })
     .await;
@@ -307,14 +328,14 @@ async fn fill_answer(state: AppState) {
     let Some(light) = peek_selected(state) else {
         return;
     };
-    let filled = run_fill(state, move |engine, puzzle| {
+    let filled = run_fill(state, move |engine, puzzle, stop| {
         grid_fill::fill_answer(
             &engine.lex,
             engine.fill(),
             puzzle,
             &light.id,
             grid_fill::ANSWER_TIME,
-            &AtomicBool::new(false),
+            stop,
         )
     })
     .await;
@@ -356,7 +377,7 @@ fn add_word(mut state: AppState, light_id: &str) {
 /// A grid was picked: start an empty puzzle on it.
 fn start_on(state: AppState, template: usize) {
     if let Some(t) = TEMPLATES.get(template) {
-        state.show(grid_fill::new_puzzle(t.rows), None, true);
+        state.show(state.signed(grid_fill::new_puzzle(t.rows)), None, true);
         focus_grid();
     }
 }
@@ -653,6 +674,13 @@ mod tests {
     use crate::files::Settings;
     use crate::state::use_app_state;
     use xw_engine::grid::Dir;
+
+    #[test]
+    fn a_stopped_fill_says_nothing() {
+        let why = "Couldn't fill the rest: stopped.".to_string();
+        assert_eq!(fill_notice(why.clone(), true), None);
+        assert_eq!(fill_notice(why.clone(), false), Some(why));
+    }
 
     fn puzzle() -> Puzzle {
         let mut p = Puzzle::new(3, 3);

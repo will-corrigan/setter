@@ -1,7 +1,6 @@
 //! Writing a clue's annotation ("OR (gold) + CHEST (box) + RA (artist)") from
 //! the device and the words picked in the word bank.
 
-#![allow(dead_code)] // wired into the Write clues page
 
 use xw_engine::bank::{DeviceKind, DeviceOption, Tone};
 
