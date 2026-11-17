@@ -373,6 +373,7 @@ mod tests {
             let state = use_app_state(|| Settings {
                 theme: Theme::Dark,
                 last_file: None,
+                ..Default::default()
             });
             use_hook(|| setup(state));
             rsx! { Shell {} }

@@ -1,8 +1,10 @@
 //! Setter: a cryptic crossword setter's desktop app.
 
 mod answers;
+mod autosave;
 mod components;
 mod ds;
+mod export;
 mod files;
 mod gallery;
 mod grid_edit;
