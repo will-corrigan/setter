@@ -233,7 +233,9 @@ Mockup: `docs/design/build-grid-mockup.html`.
   puzzle, Fill the rest, Undo/Redo with tooltips), `tokens.css` (grid tokens),
   `components.css`, `gallery.rs`.
 
-**Behaviour:** the spec's Layout section and the mockup, using the Task 1–4
+**Behaviour:** the grid block (answer bar, grid, status) is centred
+horizontally and vertically in the area left of the panel. Then the spec's
+Layout section and the mockup, using the Task 1–4
 interfaces:
 - `grid_status` for the status line,
 - `safe_suggestions` for the panel (limit 120, filtered by the search box

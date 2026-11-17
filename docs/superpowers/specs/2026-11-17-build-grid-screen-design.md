@@ -57,6 +57,9 @@ and get words that fit the letters already in place on demand.
 - **Answer bar** (above the grid): the label (e.g. "3 down"), the pattern with
   word breaks, and an editable split box "(4,5)" or "(3-4)". A split that
   doesn't add up to the answer's length is ignored.
+- **The grid is centred**, horizontally and vertically, in the area left of the
+  panel. The answer bar above it and the status line below it move with it.
+  (User, 2026-11-17.)
 - **Grid:**
   - Click a square to select it and light up its answer. Click it again, or
     press Space, to switch between across and down.
