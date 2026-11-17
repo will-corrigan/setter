@@ -8,6 +8,7 @@ pub mod container;
 pub mod deletion;
 pub mod hidden;
 pub mod homophone;
+pub mod initials;
 pub mod reversal;
 pub mod shift;
 pub mod spoonerism;
