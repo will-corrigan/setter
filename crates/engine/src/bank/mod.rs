@@ -124,7 +124,7 @@ pub struct Tile {
     pub struck: bool,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Column {
     pub title: String,
     pub tone: Tone,
@@ -134,7 +134,7 @@ pub struct Column {
     pub marks: Vec<(String, Vec<(usize, usize)>)>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct DeviceOption {
     pub label: String,
     pub tiles: Vec<Tile>,
@@ -142,7 +142,7 @@ pub struct DeviceOption {
     pub reads_as: String,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct DeviceView {
     pub kind: DeviceKind,
     pub count: usize,

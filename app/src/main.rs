@@ -1,13 +1,18 @@
 //! Setter: a cryptic crossword setter's desktop app.
 
 mod answers;
+mod components;
+mod ds;
 mod files;
+mod gallery;
 mod highlight;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
 
-const MAIN_CSS: Asset = asset!("/assets/main.css");
+const TOKENS_CSS: Asset = asset!("/assets/tokens.css");
+const BRIDGE_CSS: Asset = asset!("/assets/dx-components-theme.css");
+const COMPONENTS_CSS: Asset = asset!("/assets/components.css");
 const NEWSREADER: Asset = asset!("/assets/fonts/newsreader-latin-opsz-normal.woff2");
 const NEWSREADER_ITALIC: Asset = asset!("/assets/fonts/newsreader-latin-opsz-italic.woff2");
 const INSTRUMENT_SANS: Asset = asset!("/assets/fonts/instrument-sans-latin-wght-normal.woff2");
@@ -18,7 +23,13 @@ fn main() {
             .with_title("Setter")
             .with_inner_size(LogicalSize::new(1440.0, 920.0)),
     );
-    dioxus::LaunchBuilder::desktop().with_cfg(cfg).launch(App);
+    if std::env::args().any(|a| a == "--gallery") {
+        dioxus::LaunchBuilder::desktop()
+            .with_cfg(cfg)
+            .launch(GalleryApp);
+    } else {
+        dioxus::LaunchBuilder::desktop().with_cfg(cfg).launch(App);
+    }
 }
 
 fn font_faces() -> String {
@@ -29,22 +40,43 @@ fn font_faces() -> String {
     )
 }
 
+/// Fonts, tokens, the registry bridge, our components, then the user's theme.css.
+#[component]
+fn Styles() -> Element {
+    rsx! {
+        style { {font_faces()} }
+        document::Stylesheet { href: TOKENS_CSS }
+        document::Stylesheet { href: BRIDGE_CSS }
+        document::Stylesheet { href: COMPONENTS_CSS }
+        style { {files::user_css()} }
+    }
+}
+
+#[component]
+fn GalleryApp() -> Element {
+    rsx! {
+        Styles {}
+        gallery::Gallery {}
+    }
+}
+
+/// The app shell. Pages (Write clues, Build grid) are built on the design system next.
 #[component]
 fn App() -> Element {
+    let mut mode = use_signal(|| 1usize);
     rsx! {
-        document::Stylesheet { href: MAIN_CSS }
-        style { {font_faces()} }
-        div { class: "app",
-            div { class: "top",
-                span { class: "logo", "Setter" }
-                span { class: "mode",
-                    span { "Build grid" }
-                    span { class: "on", "Write clues" }
-                }
-                span { class: "right",
-                    button { class: "theme", "Theme" }
+        Styles {}
+        div { class: "shell",
+            header { class: "topbar",
+                span { class: "topbar__logo", "Setter" }
+                ds::segmented::Segmented {
+                    label: "Mode",
+                    options: vec!["Build grid".to_string(), "Write clues".to_string()],
+                    selected: mode(),
+                    on_change: move |i| mode.set(i),
                 }
             }
+            ds::empty_state::EmptyState { message: "Pages are built next, from the design system. Run with --gallery to see it." }
         }
     }
 }

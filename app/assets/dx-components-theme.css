@@ -1,0 +1,61 @@
+/*
+ * Bridge: the official Dioxus components (src/components/*) read these
+ * variables. They are mapped onto Setter's tokens (tokens.css), so the
+ * registry components follow our palette, light/dark mode and the user's
+ * theme.css with no colours of their own.
+ */
+
+/* Their light/dark switch (used directly by a few component styles). */
+html[data-theme="dark"] {
+  --dark: initial;
+  --light: ;
+}
+html[data-theme="light"] {
+  --dark: ;
+  --light: initial;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dark: initial;
+    --light: ;
+  }
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --dark: ;
+    --light: initial;
+  }
+}
+
+:root {
+  /* "primary" = surfaces, light to strong */
+  --primary-color: var(--surface);
+  --primary-color-1: var(--canvas);
+  --primary-color-2: var(--surface);
+  --primary-color-3: var(--raised);
+  --primary-color-4: var(--canvas);
+  --primary-color-5: var(--ind-bg);
+  --primary-color-6: var(--line);
+  --primary-color-7: var(--line-strong);
+
+  /* "secondary" = ink */
+  --secondary-color: var(--text);
+  --secondary-color-1: var(--text);
+  --secondary-color-2: var(--text);
+  --secondary-color-3: var(--text);
+  --secondary-color-4: var(--text);
+  --secondary-color-5: var(--muted);
+  --secondary-color-6: var(--faint);
+
+  /* states */
+  --focused-border-color: var(--p1);
+  --primary-success-color: var(--def-bg);
+  --secondary-success-color: var(--def);
+  --primary-warning-color: var(--p3-bg);
+  --secondary-warning-color: var(--p3);
+  --primary-error-color: var(--danger);
+  --secondary-error-color: var(--danger);
+  --contrast-error-color: var(--surface);
+  --primary-info-color: var(--surface);
+  --secondary-info-color: var(--text);
+}

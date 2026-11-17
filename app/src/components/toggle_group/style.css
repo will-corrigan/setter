@@ -1,0 +1,63 @@
+/* Official Dioxus ToggleGroup, restyled with Setter tokens (copied in via dx components). */
+.dx-toggle-group[data-variant="segmented"] {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px;
+  border-radius: var(--radius-m);
+  background: var(--canvas);
+}
+
+.dx-toggle-group[data-variant="pills"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.dx-toggle-item {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  outline: none;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+[data-variant="segmented"] > .dx-toggle-item {
+  padding: 4px 13px;
+  border-radius: var(--radius-s);
+}
+
+[data-variant="segmented"] > .dx-toggle-item[data-state="on"] {
+  background: var(--raised);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+[data-variant="pills"] > .dx-toggle-item {
+  padding: 3px 10px;
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.03em;
+}
+
+[data-variant="pills"] > .dx-toggle-item[data-state="on"] {
+  background: var(--invert);
+  border-color: var(--invert);
+  color: var(--invert-text);
+}
+
+.dx-toggle-item:hover {
+  color: var(--text);
+}
+
+.dx-toggle-item:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--focused-border-color);
+  outline-offset: 2px;
+}

@@ -1,0 +1,160 @@
+/*
+ * Setter design tokens: the single source of truth for colour, type, space,
+ * shape, depth and motion. Components never use raw values; they use these.
+ * The user's theme.css (config folder) loads last and can override any of them.
+ */
+
+/* ---------- colour: light (default) ---------- */
+:root, [data-theme-scope="light"] {
+  --canvas:#f3f5f8;
+  --surface:#fff;
+  --raised:#fff;
+  --line:#e1e6ee;
+  --line-strong:#c9d1dd;
+  --text:#1d2433;
+  --muted:#667085;
+  --faint:#98a2b3;
+  --invert:#1d2433;
+  --invert-text:#fff;
+  --p1:#1f63d6;
+  --p1-bg:#e3eeff;
+  --p2:#7445d6;
+  --p2-bg:#eee6ff;
+  --p3:#b25e00;
+  --p3-bg:#ffefd9;
+  --p4:#0f7a6b;
+  --p4-bg:#d8f3ee;
+  --p5:#c2366f;
+  --p5-bg:#fde3ee;
+  --def:#178045;
+  --def-bg:#dcf4e5;
+  --ind:#5b6474;
+  --ind-bg:#e9edf2;
+  --shadow:rgba(20,30,50,.16);
+  --danger: #b42318;
+  --danger-bg: #fdecea;
+  color-scheme: light;
+}
+
+/* ---------- colour: dark (explicit, or following the system) ---------- */
+:root[data-theme="dark"], [data-theme-scope="dark"] {
+  --canvas:#141924;
+  --surface:#1b2130;
+  --raised:#222a3b;
+  --line:#2b3446;
+  --line-strong:#3b465c;
+  --text:#e7eaf1;
+  --muted:#9aa3b6;
+  --faint:#677189;
+  --invert:#e7eaf1;
+  --invert-text:#141924;
+  --p1:#86b4ff;
+  --p1-bg:rgba(60,120,230,.22);
+  --p2:#bba1ff;
+  --p2-bg:rgba(130,90,230,.26);
+  --p3:#ffb866;
+  --p3-bg:rgba(200,120,20,.24);
+  --p4:#5fd3c3;
+  --p4-bg:rgba(20,150,130,.24);
+  --p5:#ff8fb8;
+  --p5-bg:rgba(200,50,110,.24);
+  --def:#62d699;
+  --def-bg:rgba(30,150,85,.22);
+  --ind:#b3bccd;
+  --ind-bg:rgba(150,165,190,.18);
+  --shadow:rgba(0,0,0,.45);
+  --danger: #ff8a80;
+  --danger-bg: rgba(220, 60, 50, 0.22);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas:#141924;
+    --surface:#1b2130;
+    --raised:#222a3b;
+    --line:#2b3446;
+    --line-strong:#3b465c;
+    --text:#e7eaf1;
+    --muted:#9aa3b6;
+    --faint:#677189;
+    --invert:#e7eaf1;
+    --invert-text:#141924;
+    --p1:#86b4ff;
+    --p1-bg:rgba(60,120,230,.22);
+    --p2:#bba1ff;
+    --p2-bg:rgba(130,90,230,.26);
+    --p3:#ffb866;
+    --p3-bg:rgba(200,120,20,.24);
+    --p4:#5fd3c3;
+    --p4-bg:rgba(20,150,130,.24);
+    --p5:#ff8fb8;
+    --p5-bg:rgba(200,50,110,.24);
+    --def:#62d699;
+    --def-bg:rgba(30,150,85,.22);
+    --ind:#b3bccd;
+    --ind-bg:rgba(150,165,190,.18);
+    --shadow:rgba(0,0,0,.45);
+    --danger: #ff8a80;
+    --danger-bg: rgba(220, 60, 50, 0.22);
+    color-scheme: dark;
+  }
+}
+
+:root {
+  /* ---------- type ---------- */
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, serif;
+  --text-2xs: 10.5px;  /* group labels */
+  --text-xs: 11px;     /* fine print, counts */
+  --text-sm: 12px;     /* secondary UI */
+  --text-base: 13px;   /* UI default */
+  --text-md: 15px;     /* word lists */
+  --text-lg: 18px;     /* headings, logo */
+  --text-xl: 22px;     /* the clue */
+  --text-2xl: 28px;    /* big answer tiles */
+  --leading-tight: 1.25;
+  --leading: 1.4;
+  --leading-loose: 1.5;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --tracking-letters: 0.06em; /* answers set in capitals */
+
+  /* ---------- space (4px base) ---------- */
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ---------- shape ---------- */
+  --radius-xs: 4px;
+  --radius-s: 6px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --radius-pill: 999px;
+  --border: 1px;
+  --border-strong: 1.5px;
+
+  /* ---------- depth ---------- */
+  --shadow-1: 0 1px 2px var(--shadow);
+  --shadow-2: 0 12px 30px var(--shadow);
+
+  /* ---------- motion ---------- */
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---------- layout ---------- */
+  --sidebar-width: 178px;
+  --column-min: 150px;
+  --column-max-height: 430px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}
