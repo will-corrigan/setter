@@ -315,6 +315,29 @@ fn base_forms(word: &str) -> Vec<String> {
         out.push(format!("{}e", cut(3)));
         out.extend(undouble(&cut(3)));
     }
+    // darker, happier, larger, bigger; deepest, happiest, largest, biggest
+    for (ending, n) in [("er", 2), ("est", 3)] {
+        if word.ends_with(ending) {
+            let stem = cut(n);
+            if let Some(y) = stem.strip_suffix('i') {
+                out.push(format!("{y}y"));
+            }
+            out.push(stem.clone());
+            out.push(format!("{stem}e"));
+            out.extend(undouble(&stem));
+        }
+    }
+    // typically, dramatically, happily, gently
+    if word.ends_with("ly") {
+        out.push(cut(2));
+        if word.ends_with("ily") {
+            out.push(format!("{}y", cut(3)));
+        }
+        if word.ends_with("ally") {
+            out.push(cut(4));
+        }
+        out.push(format!("{}e", cut(1)));
+    }
     out.retain(|b| b.len() >= 3);
     out
 }
@@ -377,10 +400,39 @@ mod tests {
 
     #[test]
     fn irregular_forms_use_their_base_word() {
-        for (word, base) in [("knew", "know"), ("feet", "foot"), ("began", "begin"), ("mice", "mouse")] {
+        for (word, base) in [
+            ("knew", "know"),
+            ("feet", "foot"),
+            ("began", "begin"),
+            ("mice", "mouse"),
+        ] {
             let g = th().meanings(word, 80);
             assert!(!g.is_empty(), "{word}: nothing");
-            assert!(g.iter().all(|(t, _)| t.ends_with(base)), "{word}: {:?}", g.iter().map(|(t, _)| t).collect::<Vec<_>>());
+            assert!(
+                g.iter().all(|(t, _)| t.ends_with(base)),
+                "{word}: {:?}",
+                g.iter().map(|(t, _)| t).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn comparatives_and_adverbs_use_their_base_word() {
+        for (word, base) in [
+            ("darker", "dark"),
+            ("deepest", "deep"),
+            ("biggest", "big"),
+            ("happier", "happy"),
+            ("typically", "typical"),
+            ("dramatically", "dramatic"),
+        ] {
+            let g = th().meanings(word, 80);
+            assert!(!g.is_empty(), "{word}: nothing");
+            assert!(
+                g.iter().all(|(t, _)| t.ends_with(base)),
+                "{word}: {:?}",
+                g.iter().map(|(t, _)| t).collect::<Vec<_>>()
+            );
         }
     }
 
@@ -389,7 +441,11 @@ mod tests {
         // WordNet lists "directed" only as an adjective with no other words.
         let g = th().meanings("directed", 80);
         assert!(!g.is_empty());
-        assert!(g.iter().all(|(t, _)| t.ends_with("direct")), "{:?}", g.iter().map(|(t, _)| t).collect::<Vec<_>>());
+        assert!(
+            g.iter().all(|(t, _)| t.ends_with("direct")),
+            "{:?}",
+            g.iter().map(|(t, _)| t).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -439,4 +495,3 @@ mod tests {
         assert!(th().linked("", 5).is_empty());
     }
 }
-
