@@ -1,0 +1,9 @@
+/target
+node_modules/
+/ui/dist
+/src-tauri/gen/schemas
+.direnv/
+result
+research_notes/
+reports/
+.superpowers/

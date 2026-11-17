@@ -1,0 +1,117 @@
+# Wordplay indicator words, by device.
+#
+# Bundled defaults. Put your own indicators.toml in the app's config folder to
+# extend these: lists there are appended to (and de-duplicated with) these.
+
+[anagram]
+label = "Anagram"
+words = [
+  "about", "abroad", "absurd", "adapted", "adjusted", "agitated", "altered", "amended", "anew", "arranged",
+  "assembled", "awful", "awkward", "bad", "badly", "battered", "bent", "blended", "botched", "broken",
+  "bust", "busted", "careless", "changed", "chaotic", "cocktail", "confused", "converted", "cooked", "corrupt",
+  "crazy", "criminal", "crooked", "damaged", "dancing", "deranged", "designed", "destroyed", "developed", "deviant",
+  "different", "disorderly", "disturbed", "dodgy", "drunk", "edited", "erratic", "errant", "exotic", "fashioned",
+  "fiddled", "fixed", "flexible", "fluid", "formed", "free", "fresh", "funny", "hammered", "haywire",
+  "hurt", "ill", "improper", "in error", "injured", "insane", "jumbled", "knotted", "loose", "mad",
+  "made", "mangled", "messy", "minced", "misguided", "mixed", "modified", "moved", "muddled", "naughty",
+  "new", "novel", "odd", "off", "organised", "out", "perhaps", "playing", "possibly", "potty",
+  "prepared", "processed", "rebuilt", "recast", "reformed", "remodelled", "reorganised", "repaired", "rough", "ruined",
+  "running", "scrambled", "shaken", "shattered", "shuffled", "sorted", "spoilt", "stirred", "strange", "tangled",
+  "tipsy", "tortured", "troubled", "twisted", "unruly", "unusual", "upset", "wild", "wildly", "wonky",
+  "wrecked", "wrong", "wrongly",
+]
+
+[container]
+label = "Container (outer holds inner)"
+words = [
+  "about", "around", "boxing", "capturing", "carrying", "catching", "clutching", "containing", "eating", "embracing",
+  "enclosing", "encircling", "framing", "gripping", "grasping", "guarding", "harbouring", "hiding", "holding", "housing",
+  "hugging", "keeping", "nursing", "outside", "possessing", "protecting", "retaining", "ringing", "round", "seizing",
+  "sheltering", "surrounding", "swallowing", "taking in", "trapping", "without", "wrapping",
+]
+
+[insertion]
+label = "Insertion (inner enters outer)"
+words = [
+  "admitted by", "among", "between", "boarding", "breaking", "caught by", "contained by", "entering", "filling", "held by",
+  "in", "inside", "interrupting", "invading", "kept by", "penetrating", "piercing", "splitting", "stuffed into", "within",
+]
+
+[hidden]
+label = "Hidden word"
+words = [
+  "amid", "concealed by", "contained in", "featured in", "found in", "from", "held in", "hidden in", "hiding", "housed in",
+  "in", "in part", "inside", "partly", "part of", "piece of", "seen in", "some", "within", "buried in",
+]
+
+[reversal]
+label = "Reversal"
+words = [
+  "about", "around", "back", "backed", "backing", "backwards", "brought back", "in retreat", "receding", "recalled",
+  "reflected", "retiring", "retreating", "returned", "returning", "reversed", "revolutionary", "round", "turned", "upset",
+  "going west", "in recession",
+]
+
+[reversal_down]
+label = "Reversal (down clues)"
+words = ["climbing", "going up", "lifted", "mounted", "overturned", "raised", "rising", "up", "upended", "upside down"]
+
+[deletion_first]
+label = "Delete first letter"
+words = [
+  "beheaded", "headless", "leaderless", "topless", "starting late", "not starting", "first off", "missing the first",
+  "uncapped", "decapitated", "opening off", "losing head",
+]
+
+[deletion_last]
+label = "Delete last letter"
+words = [
+  "endless", "unfinished", "incomplete", "curtailed", "cut short", "nearly", "almost", "mostly", "short", "docked",
+  "tailless", "unending", "not finished", "briefly", "abbreviated",
+]
+
+[deletion_middle]
+label = "Delete middle letter(s)"
+words = ["heartless", "gutted", "disheartened", "emptied", "eviscerated", "hollow", "cored", "without heart"]
+
+[deletion_general]
+label = "Delete a part"
+words = [
+  "without", "missing", "lacking", "losing", "dropping", "leaving", "less", "out of", "omitting", "shedding",
+  "abandoned by", "absent", "away", "deserted by", "excluding",
+]
+
+[homophone]
+label = "Homophone"
+words = [
+  "aloud", "audibly", "broadcast", "by the sound of it", "for the audience", "heard", "in speech", "it's said",
+  "on the radio", "orally", "out loud", "reportedly", "reported", "said", "say", "so to speak", "sounding",
+  "sounds like", "spoken", "they say", "we hear", "vocal", "on air",
+]
+
+[charade]
+label = "Charade (joining)"
+words = [
+  "after", "and", "before", "by", "following", "next to", "with", "joining", "meeting", "beside",
+  "then", "plus", "on", "over", "under", "beneath", "below", "leading",
+]
+
+[initial]
+label = "First letters (acrostic)"
+words = ["at first", "initially", "leaders", "heads", "originally", "starts of", "openers", "first of", "beginning", "primarily"]
+
+[final]
+label = "Last letters"
+words = ["finally", "ultimately", "ends of", "at last", "tails", "lastly", "in the end", "closing"]
+
+[alternate]
+label = "Alternate letters"
+words = ["oddly", "evenly", "regularly", "alternately", "odd bits", "even parts", "every other", "now and then", "periodically", "intermittently"]
+
+[shift]
+label = "Letter shift / substitution"
+words = ["changing", "exchanging", "for", "instead of", "replacing", "switching", "swapping", "moving", "shifting", "turning"]
+
+[spoonerism]
+label = "Spoonerism"
+words = ["Spooner", "Spooner's", "Spoonerism", "according to Spooner", "Spooner says"]
