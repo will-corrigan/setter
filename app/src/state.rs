@@ -183,11 +183,10 @@ pub fn marks(
         .enumerate()
         .filter_map(|(i, c)| picked(i).map(|p| (p.clone(), c.tone)))
         .collect();
-    let part_columns = columns.iter().filter(|c| is_part(c.tone)).count();
-    let mut parts: Vec<(String, Tone)> = all.iter().filter(|(_, t)| is_part(*t)).cloned().collect();
-    if parts.len() < part_columns {
-        parts.clear();
-    }
+    // Every picked part; whether they "add up" is the device's rule
+    // (xw_engine::bank::required_parts), applied by highlight::checks_for.
+    let parts: Vec<(String, Tone)> = all.iter().filter(|(_, t)| is_part(*t)).cloned().collect();
+
     let definition = all
         .iter()
         .find(|(_, t)| *t == Tone::Definition)
@@ -672,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn parts_stay_empty_until_every_part_has_a_pick() {
+    fn parts_hold_every_picked_part() {
         let cols = charade_columns();
         let mut picks = Picks::new();
         toggle_pick(
@@ -682,7 +681,7 @@ mod tests {
         );
         let m = marks(&picks, "0,0,a", DeviceKind::Charade, 0, &cols);
         assert_eq!(m.all, vec![("gold".to_string(), Tone::P1)]);
-        assert!(m.parts.is_empty());
+        assert_eq!(m.parts, vec![("gold".to_string(), Tone::P1)]);
         assert_eq!(m.definition, None);
         assert_eq!(
             marks(&Picks::new(), "0,0,a", DeviceKind::Charade, 0, &cols),

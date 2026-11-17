@@ -149,6 +149,22 @@ pub struct DeviceView {
     pub options: Vec<DeviceOption>,
 }
 
+/// How many wordplay parts must appear in the clue for it to "add up".
+/// Most devices need every part; a double definition needs any two of its
+/// meanings; a cryptic definition has no parts to add up.
+pub fn required_parts(kind: DeviceKind, option: &DeviceOption) -> usize {
+    let parts = option
+        .columns
+        .iter()
+        .filter(|c| matches!(c.tone, Tone::P1 | Tone::P2 | Tone::P3 | Tone::P4 | Tone::P5))
+        .count();
+    match kind {
+        DeviceKind::DoubleDefinition => parts.min(2),
+        DeviceKind::CrypticDefinition => 0,
+        _ => parts,
+    }
+}
+
 /// Most options shown per device (counts are not trimmed).
 pub const MAX_OPTIONS: usize = 12;
 
@@ -359,6 +375,19 @@ mod tests {
             "{chest:?}"
         );
         assert!(chest.contains(&"casket"));
+    }
+
+    #[test]
+    fn parts_needed_to_add_up_depend_on_the_device() {
+        let get = |answer: &str, kind: DeviceKind| {
+            let v = build(ctx(), &Indicators::bundled(), thesaurus(), answer);
+            let d = v.into_iter().find(|d| d.kind == kind).unwrap();
+            required_parts(d.kind, &d.options[0])
+        };
+        assert_eq!(get("orchestra", DeviceKind::Charade), 3);
+        assert_eq!(get("pitch", DeviceKind::DoubleDefinition), 2);
+        assert_eq!(get("orchestra", DeviceKind::CrypticDefinition), 0);
+        assert_eq!(get("tempo", DeviceKind::FirstLetters), 5);
     }
 
     #[test]

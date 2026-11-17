@@ -134,13 +134,24 @@ fn without_enumeration(text: &str) -> &str {
 }
 
 pub fn checks(text: &str, parts: &[(String, Tone)], definition: Option<&str>) -> Checks {
+    checks_for(text, parts, parts.len(), definition)
+}
+
+/// Like `checks`, but "adds up" needs only `required` of the parts in the clue
+/// (see `xw_engine::bank::required_parts`); 0 means the device has no parts.
+pub fn checks_for(
+    text: &str,
+    parts: &[(String, Tone)],
+    required: usize,
+    definition: Option<&str>,
+) -> Checks {
     let text = without_enumeration(text);
     let toks = tokens(text);
     let found = |pick: &str| {
         let w = pick_of(pick);
         (0..toks.len()).any(|i| match_at(text, &toks, i, &w).is_some())
     };
-    let adds_up = !parts.is_empty() && parts.iter().all(|(p, _)| found(p));
+    let adds_up = required > 0 && parts.iter().filter(|(p, _)| found(p)).count() >= required;
     let definition_at_end = definition.map(pick_of).is_some_and(|d| {
         !d.words.is_empty()
             && d.words.len() <= toks.len()
@@ -234,6 +245,19 @@ mod tests {
             )
             .adds_up
         );
+    }
+
+    #[test]
+    fn adds_up_needs_only_the_required_number_of_parts() {
+        let parts = [
+            ("throw".to_string(), Tone::P1),
+            ("tar".to_string(), Tone::P2),
+            ("field".to_string(), Tone::P3),
+        ];
+        assert!(checks_for("Throw tar", &parts[..2], 2, None).adds_up);
+        assert!(!checks_for("Throw tar", &parts[..2], 0, None).adds_up);
+        assert!(!checks_for("Throw tar", &parts, 3, None).adds_up);
+        assert!(!checks_for("Throw", &parts[..1], 2, None).adds_up);
     }
 
     #[test]

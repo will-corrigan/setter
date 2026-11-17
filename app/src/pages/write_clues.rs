@@ -130,7 +130,11 @@ fn Clue() -> Element {
         ),
         _ => state::Marks::default(),
     };
-    let checks = highlight::checks(&text, &marks.parts, marks.definition.as_deref());
+    let required = match (&shown, option) {
+        (Some(s), Some(o)) => xw_engine::bank::required_parts(s.device, o),
+        _ => 0,
+    };
+    let checks = highlight::checks_for(&text, &marks.parts, required, marks.definition.as_deref());
     rsx! {
         ClueField {
             text,
