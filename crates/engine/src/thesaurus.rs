@@ -258,7 +258,8 @@ fn base_forms(word: &str) -> Vec<String> {
     // "stopp" → "stop"
     let undouble = |stem: &str| {
         let b = stem.as_bytes();
-        (b.len() >= 3 && b[b.len() - 1] == b[b.len() - 2]).then(|| stem[..stem.len() - 1].to_string())
+        (b.len() >= 3 && b[b.len() - 1] == b[b.len() - 2])
+            .then(|| stem[..stem.len() - 1].to_string())
     };
     if !word.is_ascii() {
         return out;

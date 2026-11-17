@@ -149,9 +149,9 @@ pub fn move_definition(
 pub fn arrange(text: &str, picks: &HashMap<usize, String>) -> String {
     let mut out = text.to_string();
     for word in picks.values() {
-        if let Some((a, b)) = highlight::find(&out, word).filter(|(a, _)| {
-            out[..*a].chars().any(|c| !c.is_whitespace())
-        }) {
+        if let Some((a, b)) = highlight::find(&out, word)
+            .filter(|(a, _)| out[..*a].chars().any(|c| !c.is_whitespace()))
+        {
             out = format!("{}{}{}", &out[..a], word, &out[b..]);
         }
     }

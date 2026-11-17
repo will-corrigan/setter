@@ -14,8 +14,8 @@ use crate::grid_edit::{self, Cursor};
 use crate::grid_fill;
 use crate::grid_view::{self, Room};
 use crate::state::{self, AppState, Found, Mode};
-use dioxus::prelude::*;
 use dioxus::core::spawn_forever;
+use dioxus::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use xw_engine::fill::WordCount;
@@ -284,9 +284,7 @@ impl Drop for Busy {
 /// stopped; if it fails, nothing changes and the notice says why.
 async fn run_fill(
     mut state: AppState,
-    fill: impl FnOnce(&state::Engine, &Puzzle, &AtomicBool) -> Result<Puzzle, String>
-        + Send
-        + 'static,
+    fill: impl FnOnce(&state::Engine, &Puzzle, &AtomicBool) -> Result<Puzzle, String> + Send + 'static,
 ) -> bool {
     let Some(puzzle) = state.puzzle.peek().clone() else {
         return false;
@@ -299,8 +297,7 @@ async fn run_fill(
         stop: stop.clone(),
     };
     let flag = stop.clone();
-    let done =
-        tokio::task::spawn_blocking(move || fill(&state::engine(), &puzzle, &flag)).await;
+    let done = tokio::task::spawn_blocking(move || fill(&state::engine(), &puzzle, &flag)).await;
     // Before the guard goes: it raises the flag too.
     let stopped = stop.load(Ordering::Relaxed);
     drop(busy);
@@ -727,7 +724,11 @@ mod tests {
                 });
                 stop
             });
-            let text = format!("{} {}", (state.build.working)(), stop.load(Ordering::Relaxed));
+            let text = format!(
+                "{} {}",
+                (state.build.working)(),
+                stop.load(Ordering::Relaxed)
+            );
             rsx! { "{text}" }
         });
         assert_eq!(html, "false true");
@@ -987,7 +988,11 @@ mod tests {
             assert!(html.contains(&format!(">{n}×{n}<")), "{n}: {html}");
         }
         let fifteens = TEMPLATES.iter().filter(|t| t.rows.len() == 15).count();
-        assert_eq!(html.matches("template-picker__thumb").count(), fifteens, "{html}");
+        assert_eq!(
+            html.matches("template-picker__thumb").count(),
+            fifteens,
+            "{html}"
+        );
         for t in TEMPLATES.iter().filter(|t| t.rows.len() == 15) {
             assert!(html.contains(&format!(">{}<", t.name)), "{}", t.name);
         }

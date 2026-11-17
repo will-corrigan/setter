@@ -109,7 +109,12 @@ mod segment_tests {
         assert_eq!(v[1]["t"], " box for ");
         assert!(v[1]["tone"].is_null());
         assert_eq!(v[2]["tone"], "def");
-        let joined: String = v.as_array().unwrap().iter().map(|p| p["t"].as_str().unwrap()).collect();
+        let joined: String = v
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["t"].as_str().unwrap())
+            .collect();
         assert_eq!(joined, "Gold box for band");
     }
 }

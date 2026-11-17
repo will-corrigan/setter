@@ -1,7 +1,6 @@
 //! Writing a clue's annotation ("OR (gold) + CHEST (box) + RA (artist)") from
 //! the device and the words picked in the word bank.
 
-
 use xw_engine::bank::{DeviceKind, DeviceOption, Tone};
 
 fn is_part(t: Tone) -> bool {

@@ -396,17 +396,22 @@ mod tests {
         save(&path, &p).unwrap();
         assert_eq!(load(&path).unwrap().title, "New");
         // Nothing left over beside it.
-        let names: Vec<_> = fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name()).collect();
+        let names: Vec<_> = fs::read_dir(&d)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
         assert_eq!(names, vec![std::ffi::OsString::from("p.xword")]);
         let _ = fs::remove_dir_all(&d);
     }
 
-
     #[test]
     fn tests_never_use_the_user_s_config_folder() {
         let d = config_dir();
-        assert!(d.components().any(|c| c.as_os_str() == "scratch"), "{}", d.display());
+        assert!(
+            d.components().any(|c| c.as_os_str() == "scratch"),
+            "{}",
+            d.display()
+        );
         assert!(!d.ends_with("setter"));
     }
-
 }

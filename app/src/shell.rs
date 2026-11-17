@@ -1,5 +1,6 @@
 //! The app shell: startup, the top bar, and whichever page the mode shows.
 
+use crate::autosave;
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::answer_nav::AnswerNav;
 use crate::ds::crossword_grid::GridKey;
@@ -10,15 +11,14 @@ use crate::ds::note::Note;
 use crate::ds::notice::Notice;
 use crate::ds::segmented::Segmented;
 use crate::ds::top_bar::TopBar as Bar;
-use crate::autosave;
 use crate::export::{self, ExportFormat};
 use crate::files;
 use crate::pages::about::About;
 use crate::pages::build_grid::{self, BuildGrid};
 use crate::pages::write_clues::WriteClues;
 use crate::state::{self, AppState, Mode, Shortcut};
-use dioxus::prelude::*;
 use dioxus::core::spawn_forever;
+use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
@@ -743,7 +743,10 @@ mod tests {
             assert!(button(&html, label).contains("disabled"), "{label}: {html}");
         }
         for label in ["Save", "Stop filling"] {
-            assert!(!button(&html, label).contains("disabled"), "{label}: {html}");
+            assert!(
+                !button(&html, label).contains("disabled"),
+                "{label}: {html}"
+            );
         }
     }
 
@@ -755,7 +758,9 @@ mod tests {
                 state.mode.set(mode);
             });
             let save = html.find(">Save<").expect("save");
-            let export = html.find(">Export<").unwrap_or_else(|| panic!("{mode:?}: {html}"));
+            let export = html
+                .find(">Export<")
+                .unwrap_or_else(|| panic!("{mode:?}: {html}"));
             assert!(save < export, "{html}");
             assert!(html.contains(r#"aria-haspopup="menu""#), "{html}");
         }

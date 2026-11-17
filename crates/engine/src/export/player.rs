@@ -301,7 +301,11 @@ mod tests {
         assert_eq!(h.matches("window.setterPlayer").count(), 1, "JS once");
         assert_eq!(h.matches(".keys {").count(), 1, "CSS once");
         assert_eq!(h.matches("id=\"setter-data\"").count(), 1, "data once");
-        assert_eq!(h.matches(&fonts::base64(fonts::SANS.woff2)).count(), 1, "font once");
+        assert_eq!(
+            h.matches(&fonts::base64(fonts::SANS.woff2)).count(),
+            1,
+            "font once"
+        );
         assert!(h.contains("<title>{{JS}} &lt;!--&lt;script&gt;</title>"));
         assert!(h.contains("<h1>{{JS}} &lt;!--&lt;script&gt;</h1>"));
         assert!(h.contains("by {{DATA}} &lt;/script&gt;</span>"));
@@ -359,5 +363,4 @@ mod tests {
         assert_ne!(id(&blank(3, 3, &[])), id(&blank(3, 3, &[4])));
         assert_ne!(id(&blank(2, 3, &[])), id(&blank(3, 2, &[])));
     }
-
 }

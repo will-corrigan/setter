@@ -93,10 +93,11 @@ fn Head() -> Element {
         .unwrap_or_default();
     let device = shown.as_ref().map(|s| s.device);
     let selected = shown.as_ref().map_or(0, |s| s.option);
-    let has_definition = shown
-        .as_ref()
-        .and_then(|s| s.option())
-        .is_some_and(|o| o.columns.iter().any(|c| c.tone == xw_engine::bank::Tone::Definition));
+    let has_definition = shown.as_ref().and_then(|s| s.option()).is_some_and(|o| {
+        o.columns
+            .iter()
+            .any(|c| c.tone == xw_engine::bank::Tone::Definition)
+    });
     let definition_last = state.settings.read().definition_last;
     rsx! {
         div { class: "clue-head",
@@ -297,7 +298,10 @@ mod tests {
         assert!(html.contains(r#"data-variant="pills""#), "{html}");
         // Clue field bound to the clue, with the enumeration.
         assert!(html.contains("clue-field__editor"), "{html}");
-        assert!(html.contains(r#"value="Pet""#) && html.contains("(3)"), "{html}");
+        assert!(
+            html.contains(r#"value="Pet""#) && html.contains("(3)"),
+            "{html}"
+        );
         // Reads-as line and one word column per column.
         assert!(html.contains("reads-as"), "{html}");
         assert!(html.contains("word-bank"), "{html}");

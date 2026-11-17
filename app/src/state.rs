@@ -779,10 +779,23 @@ impl AppState {
             return;
         };
         // The picked word goes into the clue, or out of it.
-        let picked = option_picks(&self.picks.peek(), &light, device, option, found.columns.len());
+        let picked = option_picks(
+            &self.picks.peek(),
+            &light,
+            device,
+            option,
+            found.columns.len(),
+        );
         let order = clue_draft::order(&found.columns, self.settings.peek().definition_last);
         let text = self.clue_field(&light, |c| c.text.clone());
-        let text = clue_draft::place(&text, &order, &picked, column, old.as_deref(), new.as_deref());
+        let text = clue_draft::place(
+            &text,
+            &order,
+            &picked,
+            column,
+            old.as_deref(),
+            new.as_deref(),
+        );
         self.set_clue_field(&light, text, |c| &mut c.text);
 
         let note = annotation_for(&self.picks.peek(), &light, device, option, found);
@@ -808,7 +821,13 @@ impl AppState {
             return;
         };
         let light = self.selection.peek().light.clone();
-        let picked = option_picks(&self.picks.peek(), &light, shown.device, shown.option, found.columns.len());
+        let picked = option_picks(
+            &self.picks.peek(),
+            &light,
+            shown.device,
+            shown.option,
+            found.columns.len(),
+        );
         let definition = found
             .columns
             .iter()
@@ -829,7 +848,13 @@ impl AppState {
             .shown()
             .and_then(|shown| {
                 shown.option().map(|o| {
-                    option_picks(&self.picks.peek(), &light, shown.device, shown.option, o.columns.len())
+                    option_picks(
+                        &self.picks.peek(),
+                        &light,
+                        shown.device,
+                        shown.option,
+                        o.columns.len(),
+                    )
                 })
             })
             .unwrap_or_default();
@@ -1446,12 +1471,19 @@ mod tests {
         };
         let mut picks = Picks::new();
         let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
-        assert_eq!(annotation_for(&picks, "0,0,a", DeviceKind::Charade, 0, &option), "");
+        assert_eq!(
+            annotation_for(&picks, "0,0,a", DeviceKind::Charade, 0, &option),
+            ""
+        );
         toggle_pick(&mut picks, key(0), "gold");
         toggle_pick(&mut picks, key(1), "box");
         toggle_pick(&mut picks, key(2), "band");
         // Another answer's picks don't count.
-        toggle_pick(&mut picks, pick_key("2,0,a", DeviceKind::Charade, 0, 0), "art");
+        toggle_pick(
+            &mut picks,
+            pick_key("2,0,a", DeviceKind::Charade, 0, 0),
+            "art",
+        );
         assert_eq!(
             annotation_for(&picks, "0,0,a", DeviceKind::Charade, 0, &option),
             "OR (gold) + CHEST (box); definition: band"
@@ -1472,7 +1504,11 @@ mod tests {
             |state| {
                 let puzzle = state.puzzle.read();
                 let clue = puzzle.as_ref().unwrap().clues.get("0,0,a").cloned();
-                format!("{}|{}", clue.unwrap_or_default().annotation, (state.dirty)())
+                format!(
+                    "{}|{}",
+                    clue.unwrap_or_default().annotation,
+                    (state.dirty)()
+                )
             },
         );
         assert_eq!(said, "OR (gold) + CHEST (box)|true");
@@ -1607,9 +1643,18 @@ mod tests {
             },
         );
         assert_eq!(said, "Write");
-        let shown = after(|_| {}, |state| {
-            format!("{:?}", crate::autosave::step(state.puzzle.read().as_ref(), state.pristine.read().as_ref()))
-        });
+        let shown = after(
+            |_| {},
+            |state| {
+                format!(
+                    "{:?}",
+                    crate::autosave::step(
+                        state.puzzle.read().as_ref(),
+                        state.pristine.read().as_ref()
+                    )
+                )
+            },
+        );
         assert_eq!(shown, "Remove");
         let saved = after(
             |state| {
@@ -1620,7 +1665,10 @@ mod tests {
             |state| {
                 format!(
                     "{:?} {}",
-                    crate::autosave::step(state.puzzle.read().as_ref(), state.pristine.read().as_ref()),
+                    crate::autosave::step(
+                        state.puzzle.read().as_ref(),
+                        state.pristine.read().as_ref()
+                    ),
                     (state.dirty)()
                 )
             },
@@ -1631,7 +1679,10 @@ mod tests {
             |state| {
                 format!(
                     "{:?} {}",
-                    crate::autosave::step(state.puzzle.read().as_ref(), state.pristine.read().as_ref()),
+                    crate::autosave::step(
+                        state.puzzle.read().as_ref(),
+                        state.pristine.read().as_ref()
+                    ),
                     (state.dirty)()
                 )
             },

@@ -41,11 +41,10 @@ pub fn write_autosave(p: &Puzzle, source: Option<&Path>) -> Result<(), String> {
 pub fn write_autosave_in(dir: &Path, p: &Puzzle, source: Option<&Path>) -> Result<(), String> {
     crate::files::save(&autosave_path(dir), p)?;
     match source {
-        Some(path) => crate::files::write_whole(
-            &source_path(dir),
-            path.to_string_lossy().as_bytes(),
-        )
-        .map_err(|e| format!("Couldn't autosave: {e}")),
+        Some(path) => {
+            crate::files::write_whole(&source_path(dir), path.to_string_lossy().as_bytes())
+                .map_err(|e| format!("Couldn't autosave: {e}"))
+        }
         None => {
             let _ = fs::remove_file(source_path(dir));
             Ok(())

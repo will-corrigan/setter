@@ -511,11 +511,29 @@ mod tests {
         let e = engine();
         // Two separate three-letter answers: CAT along the top, the bottom open.
         let p = puzzle(&["cat", "###", "..."]);
-        let open = suggest(&e.lex, e.fill(), &p.grid, "2,0,a", "", WordCount::Any, "ca", 40);
+        let open = suggest(
+            &e.lex,
+            e.fill(),
+            &p.grid,
+            "2,0,a",
+            "",
+            WordCount::Any,
+            "ca",
+            40,
+        );
         assert!(!open.is_empty());
         assert!(open.iter().all(|s| s.key != "cat"), "{open:?}");
         // An answer's own word is still listed for it.
-        let own = suggest(&e.lex, e.fill(), &p.grid, "0,0,a", "", WordCount::Any, "ca", 40);
+        let own = suggest(
+            &e.lex,
+            e.fill(),
+            &p.grid,
+            "0,0,a",
+            "",
+            WordCount::Any,
+            "ca",
+            40,
+        );
         assert!(own.iter().any(|s| s.key == "cat"), "{own:?}");
     }
 
