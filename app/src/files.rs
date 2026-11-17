@@ -89,6 +89,26 @@ pub fn ensure_user_files_in(dir: &Path) {
     }
 }
 
+/// Add a word or phrase of the user's own to `words.txt` (once).
+pub fn add_own_word(text: &str) -> Result<(), String> {
+    add_own_word_in(&config_dir(), text)
+}
+
+pub fn add_own_word_in(dir: &Path, text: &str) -> Result<(), String> {
+    let path = dir.join("words.txt");
+    let entry = text.trim().to_lowercase();
+    if entry.is_empty() || read_lines(&path).iter().any(|l| l.to_lowercase() == entry) {
+        return Ok(());
+    }
+    let mut contents = fs::read_to_string(&path).unwrap_or_default();
+    if !contents.is_empty() && !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents.push_str(&entry);
+    contents.push('\n');
+    fs::write(&path, contents).map_err(|e| format!("Couldn't add the word: {e}"))
+}
+
 /// Everything the engine needs, with the user's own lists merged in.
 pub struct EngineData {
     pub lex: Lexicon,
@@ -243,6 +263,17 @@ mod tests {
         assert_eq!(theme_head(Theme::System), "");
         assert!(theme_head(Theme::Dark).contains("dataset.theme='dark'"));
         assert!(theme_head(Theme::Light).contains("dataset.theme='light'"));
+    }
+
+    #[test]
+    fn own_words_are_added_once_and_count_as_words() {
+        let d = temp_dir("ownwords");
+        ensure_user_files_in(&d);
+        add_own_word_in(&d, "zob rist").unwrap();
+        add_own_word_in(&d, "zob rist").unwrap();
+        let text = fs::read_to_string(d.join("words.txt")).unwrap();
+        assert_eq!(text.lines().filter(|l| *l == "zob rist").count(), 1);
+        assert!(load_engine_data_from(&d).lex.contains("zobrist"));
     }
 
     #[test]
