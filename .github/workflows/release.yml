@@ -127,7 +127,7 @@ jobs:
         run: >-
           vpk pack --packId Setter --packVersion "$VERSION" --packDir "$APP_DIR"
           --mainExe setter.exe --packTitle Setter --packAuthors "Will Corrigan"
-          --icon app/icons/icon.ico --outputDir Releases
+          --icon app/icons/icon.ico --outputDir Releases --noPortable
       - name: Keep it with the run
         uses: actions/upload-artifact@v4
         with:

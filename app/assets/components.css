@@ -448,7 +448,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .size-tiles__label { color: var(--muted); font-size: var(--text-sm); }
 /* Every size pictured at the same overall size. */
 .size-tiles__tile .mini-grid { --mini-cell: calc(var(--size-tile-grid) / var(--tile-side)); }
-.puzzle-list { background: var(--surface); border: var(--border) solid var(--line); border-radius: var(--radius-l); overflow: hidden; }
+/* No overflow clipping: each row's menu opens over the rows below. */
+.puzzle-list { background: var(--surface); border: var(--border) solid var(--line); border-radius: var(--radius-l); }
+.puzzle-list__row:first-child { border-top-left-radius: var(--radius-l); border-top-right-radius: var(--radius-l); }
+.puzzle-list__row:last-child { border-bottom-left-radius: var(--radius-l); border-bottom-right-radius: var(--radius-l); }
 .puzzle-list__row { display: flex; align-items: center; gap: var(--space-2); padding-right: var(--space-3); border-bottom: var(--border) solid var(--line); }
 .puzzle-list__row:last-child { border-bottom: 0; }
 .puzzle-list__row:hover { background: var(--canvas); }
@@ -500,7 +503,16 @@ button, input, textarea { font: inherit; color: inherit; }
 .write-clues__rail { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: var(--border) solid var(--line); }
 .write-clues__rail > .side-nav { flex: 1; min-height: 0; border-right: 0; }
 .write-clues__grid { display: grid; justify-items: center; gap: var(--space-1-5); padding: var(--space-3) var(--space-2) var(--space-2); border-bottom: var(--border) solid var(--line); }
-.write-clues__grid .mini-grid { --mini-cell: calc(var(--rail-grid) / var(--side)); cursor: default; }
+/* The puzzle's grid, small: squares sized to fit the rail, letters scaled
+   with them; numbers would be too small to read. */
+.write-clues__grid .xw-grid {
+  --grid-cell: calc((var(--rail-grid) - var(--grid-gap) * var(--side)) / var(--side));
+  --grid-letter-size: calc(var(--grid-cell) * 0.6);
+  --grid-break-width: calc(var(--grid-cell) * 0.16);
+  --grid-hyphen-length: calc(var(--grid-cell) * 0.4);
+  --grid-frame: var(--border);
+}
+.write-clues__grid .xw-grid__number { display: none; }
 .write-clues__count { color: var(--muted); font-size: var(--text-sm); }
 /* The clue card: the clue, its checks and definition switch, the explanation. */
 .clue-card { display: grid; gap: var(--space-2-5); background: var(--surface); border: var(--border) solid var(--line); border-radius: var(--radius-l); padding: var(--space-3) var(--space-4); }

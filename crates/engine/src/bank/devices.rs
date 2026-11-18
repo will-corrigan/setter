@@ -233,7 +233,10 @@ fn alternate_marks(text: &str, odd: bool) -> Vec<(usize, usize)> {
 }
 
 fn anagram(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
-    let a = wordplay::anagram::find(ctx, key);
+    let mut a = wordplay::anagram::find(ctx, key);
+    // Splits are made-up phrases: every word in them must be decent.
+    a.two.retain(|ws| ws.iter().all(|w| ctx.decent(w)));
+    a.three.retain(|ws| ws.iter().all(|w| ctx.decent(w)));
     let count = a.single.len() + a.two.len() + a.three.len();
     let groups: [(&str, Vec<String>); 3] = [
         (

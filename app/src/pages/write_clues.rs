@@ -4,15 +4,16 @@
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::answer_nav::AnswerNav;
 use crate::ds::clue_field::ClueField;
+use crate::ds::crossword_grid::CrosswordGrid;
 use crate::ds::empty_state::EmptyState;
 use crate::ds::inline_edit::InlineEdit;
-use crate::ds::mini_grid::{MiniGrid, MiniSize};
 use crate::ds::note::Note;
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
 use crate::ds::side_nav::{NavItem, SideNav};
 use crate::ds::tiles::Tiles;
 use crate::ds::word_column::WordColumn;
+use crate::grid_view;
 use crate::highlight;
 use crate::keys;
 use crate::state::{self, AppState};
@@ -55,24 +56,16 @@ fn GridRail() -> Element {
         return rsx! {};
     };
     let light = state.selection.read().light.clone();
-    let lit: Vec<usize> = p
-        .grid
-        .lights()
-        .into_iter()
-        .find(|l| l.id == light)
-        .map(|l| l.cells)
-        .unwrap_or_default();
-    let blocks: Vec<bool> = p.grid.cells.iter().map(|c| c.block).collect();
+    let cursor = state::clue_cursor(&p.grid, (state.build.cursor)(), &light);
     let (clued, total) = (state.clued)();
     rsx! {
         div { class: "write-clues__grid", style: "--side: {p.grid.width.max(p.grid.height)}",
-            MiniGrid {
+            CrosswordGrid {
+                cells: grid_view::grid_cells(p, cursor),
                 columns: p.grid.width,
-                blocks,
-                size: MiniSize::Medium,
-                current: lit.first().copied(),
-                lit,
-                on_cell: move |cell: usize| state.select_cell(cell),
+                on_select: move |cell: usize| state.select_cell(cell),
+                on_words: move |cell: usize| state.select_cell(cell),
+                on_key: move |_| {},
             }
             span { class: "write-clues__count", "{clued} of {total} clued" }
         }
@@ -233,8 +226,16 @@ fn Clue() -> Element {
                 on_arrange: move |t| state.arrange_clue(t),
             }
             div { class: "clue-card__foot",
-                if let Some(o) = option {
-                    ReadsAs { text: o.reads_as.clone(), checks }
+                if let (Some(o), Some(s)) = (option, shown.as_ref()) {
+                    ReadsAs {
+                        text: state::reads_as_picked(
+                            &o.reads_as,
+                            &o.columns,
+                            &state.picks.read(),
+                            |i| state::pick_key(&answer.light_id, s.device, s.option, i),
+                        ),
+                        checks,
+                    }
                 }
                 if has_definition {
                     div { class: "clue-card__definition",
@@ -415,13 +416,21 @@ mod tests {
             with_bank(state, "cat")
         });
         let rail = html.find("write-clues__rail").expect("rail");
-        let grid = &html[rail..];
-        assert!(grid.contains("mini-grid--medium"), "{html}");
-        assert_eq!(grid.matches("is-current").count(), 1, "{html}");
+        let grid = &html[rail..html.find("side-nav").unwrap()];
+        assert!(grid.contains("xw-grid"), "{html}");
+        assert!(
+            grid.contains(">C<") || grid.contains("</span>C<"),
+            "letters show: {grid}"
+        );
+        assert!(
+            grid.contains(">B<") || grid.contains("</span>B<"),
+            "letters show: {grid}"
+        );
+        assert_eq!(grid.matches("is-current").count(), 1, "{grid}");
         assert_eq!(
-            grid.matches("is-lit").count(),
+            grid.matches("is-answer").count(),
             2,
-            "the rest of 1 across: {html}"
+            "the rest of 1 across: {grid}"
         );
         assert!(html.contains("0 of 4 clued"), "{html}");
         // The rail holds the devices too.
