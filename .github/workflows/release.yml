@@ -6,8 +6,9 @@
 # vX.Y.Z and publishes the GitHub Release, and then the Windows installer
 # (.exe) is built and attached to it.
 #
-# The installer can also be (re)built for an existing release by hand: Actions
-# → Release → Run workflow, with the tag.
+# By hand (Actions → Release → Run workflow): with a tag, (re)build that
+# release's installer and attach it; without one, build the chosen branch as a
+# test and keep the installer only as a workflow artifact.
 name: Release
 
 on:
@@ -16,8 +17,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Build the Windows installer for this existing release tag (e.g. v0.1.0)"
-        required: true
+        description: "Release tag to build the installer for (e.g. v0.1.0); leave empty to test-build the branch"
+        required: false
+        default: ""
 
 jobs:
   release-pr:
@@ -90,12 +92,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ env.TAG || github.ref }}
       - uses: jdx/mise-action@v4
       - name: Build the installer
         working-directory: app
         run: dx bundle --platform desktop --release --package-types nsis --out-dir ../dist
+      - name: Keep it with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: setter-windows-installer
+          path: dist/*.exe
       - name: Attach it to the release
+        if: env.TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" dist/*.exe --clobber
