@@ -20,6 +20,11 @@ on:
         description: "Release tag to build the installer for (e.g. v0.1.0); leave empty to test-build the branch"
         required: false
         default: ""
+      platform:
+        description: "Which installers to build"
+        type: choice
+        options: [both, windows, mac]
+        default: both
 
 jobs:
   release-pr:
@@ -85,7 +90,7 @@ jobs:
     if: >-
       always() &&
       ((github.event_name == 'push' && needs.release.outputs.created == 'true') ||
-       github.event_name == 'workflow_dispatch')
+       (github.event_name == 'workflow_dispatch' && inputs.platform != 'mac'))
     runs-on: windows-latest
     permissions:
       contents: write
@@ -121,6 +126,10 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "APP_DIR=$(dirname "$exe")" >> "$GITHUB_ENV"
           ls "$(dirname "$exe")"
+      # vpk is a .NET 10 tool; the runners' own .NET isn't always found.
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
       - name: Install vpk
         run: |
           dotnet tool install -g vpk --version "$VPK_VERSION"
@@ -154,7 +163,7 @@ jobs:
     if: >-
       always() &&
       ((github.event_name == 'push' && needs.release.outputs.created == 'true') ||
-       github.event_name == 'workflow_dispatch')
+       (github.event_name == 'workflow_dispatch' && inputs.platform != 'windows'))
     runs-on: macos-latest
     permissions:
       contents: write
@@ -189,6 +198,10 @@ jobs:
           echo "APP=$app" >> "$GITHUB_ENV"
           echo "MAIN_EXE=$main" >> "$GITHUB_ENV"
           echo "$app"; ls -R "$app/Contents" | head -50
+      # vpk is a .NET 10 tool; the runners' own .NET isn't always found.
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
       - name: Install vpk
         run: |
           dotnet tool install -g vpk --version "$VPK_VERSION"
