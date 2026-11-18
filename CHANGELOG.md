@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/will-corrigan/setter/compare/v0.1.4...v0.1.5) - 2026-11-18
+
+### Added
+
+- *(app)* check for updates every few hours, and an Updates section in Settings ([#19](https://github.com/will-corrigan/setter/pull/19))
+
 ## [0.1.4](https://github.com/will-corrigan/setter/compare/v0.1.3...v0.1.4) - 2026-11-18
 
 ### Added
