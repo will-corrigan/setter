@@ -479,4 +479,77 @@ mod tests {
         let cols = &fl.options[0].columns;
         assert_eq!(cols.iter().filter(|c| c.title.ends_with('…')).count(), 5);
     }
+
+    fn labels(answer: &str, kind: DeviceKind) -> Vec<String> {
+        build(ctx(), &Indicators::bundled(), thesaurus(), answer)
+            .into_iter()
+            .find(|d| d.kind == kind)
+            .unwrap()
+            .options
+            .into_iter()
+            .map(|o| o.label)
+            .collect()
+    }
+
+    #[test]
+    fn every_part_offered_has_something_to_clue_it_with() {
+        let th = thesaurus();
+        // REES has no meaning of its own: it is offered only as SEER backwards.
+        let v = build(ctx(), &Indicators::bundled(), th, "trees");
+        let charade = v.iter().find(|d| d.kind == DeviceKind::Charade).unwrap();
+        let rees = charade
+            .options
+            .iter()
+            .find(|o| o.label == "T + REES")
+            .expect("T + REES");
+        assert!(
+            rees.reads_as.contains("seer backwards"),
+            "{}",
+            rees.reads_as
+        );
+        let groups: Vec<&str> = rees.columns[1]
+            .groups
+            .iter()
+            .map(|(g, _)| g.as_str())
+            .collect();
+        assert!(!groups.contains(&"Word"), "{groups:?}");
+        let joining = rees.columns.last().unwrap();
+        assert!(
+            joining.groups.iter().any(|(g, _)| g == "Backwards"),
+            "{:?}",
+            joining.groups
+        );
+        let plain = charade
+            .options
+            .iter()
+            .find(|o| o.label == "TREE + S")
+            .unwrap();
+        let joining = plain.columns.last().unwrap();
+        assert!(!joining.groups.iter().any(|(g, _)| g == "Backwards"));
+        assert!(labels("trees", DeviceKind::Charade).contains(&"TREE + S".to_string()));
+        for answer in ["trees", "orchestra", "carpet", "teaspoon", "standard"] {
+            for kind in [DeviceKind::Charade, DeviceKind::Container] {
+                let v = build(ctx(), &Indicators::bundled(), th, answer);
+                let d = v.iter().find(|d| d.kind == kind).unwrap();
+                for o in &d.options {
+                    for c in o.columns.iter().filter(|c| {
+                        matches!(c.tone, Tone::P1 | Tone::P2 | Tone::P3 | Tone::P4 | Tone::P5)
+                    }) {
+                        let clues: usize = c
+                            .groups
+                            .iter()
+                            .filter(|(g, _)| g != "Word" && g != "Backwards")
+                            .map(|(_, items)| items.len())
+                            .sum();
+                        assert!(
+                            clues > 0,
+                            "{answer} {}: {} has nothing to clue it",
+                            o.label,
+                            c.title
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

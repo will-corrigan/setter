@@ -136,6 +136,17 @@ fn part_column(
     col
 }
 
+/// Keep only the ways a part can be clued: an abbreviation always; a word,
+/// or a word backwards, only if it has a meaning to give. REES has none, so
+/// it is offered only as SEER backwards. `false` if nothing is left.
+fn keep_cluable(th: &Thesaurus, part: &mut Part) -> bool {
+    part.options.retain(|p| match p {
+        Piece::Abbrev { .. } => true,
+        Piece::Word { word } | Piece::Reversed { word } => !th.meanings(&word.text, 1).is_empty(),
+    });
+    !part.options.is_empty()
+}
+
 /// A column for a whole word: the word itself, then its meanings.
 fn word_column(th: &Thesaurus, title: impl Into<String>, word: &str, tone: Tone) -> Column {
     let mut groups = vec![("Word".to_string(), vec![word.to_string()])];
@@ -340,7 +351,8 @@ fn pieces_groups(pieces: &[Piece], letters: &str) -> Vec<(String, Vec<String>)> 
 }
 
 fn charade(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
-    let found = wordplay::charade::find(ctx, key);
+    let mut found = wordplay::charade::find(ctx, key);
+    found.retain_mut(|c| c.parts.iter_mut().all(|p| keep_cluable(th, p)));
     let options = found
         .iter()
         .take(MAX_OPTIONS)
@@ -360,7 +372,16 @@ fn charade(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
                 })
                 .collect();
             columns.push(definition(th, key));
-            columns.push(indicators("Joining words", ind, &[("Charade", "charade")]));
+            // A part read backwards needs a word saying so too.
+            let backwards = c
+                .parts
+                .iter()
+                .any(|p| matches!(p.options.first(), Some(Piece::Reversed { .. })));
+            let mut lists = vec![("Charade", "charade")];
+            if backwards {
+                lists.push(("Backwards", "reversal"));
+            }
+            columns.push(indicators("Joining words", ind, &lists));
             DeviceOption {
                 label: c
                     .parts
@@ -388,7 +409,8 @@ fn charade(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
 }
 
 fn container(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
-    let found = wordplay::container::find(ctx, key);
+    let mut found = wordplay::container::find(ctx, key);
+    found.retain_mut(|c| keep_cluable(th, &mut c.outer) && keep_cluable(th, &mut c.inner));
     let options = found
         .iter()
         .take(MAX_OPTIONS)
