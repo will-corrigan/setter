@@ -28,6 +28,7 @@ pub enum Command {
     NextAnswer,
     Theme(Theme),
     About,
+    Settings,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -113,6 +114,19 @@ pub fn commands(has_puzzle: bool, has_file: bool, can_undo: bool, can_redo: bool
             None,
             &["credits", "licences"],
             Command::About,
+        ),
+        command(
+            "Settings",
+            Some("Ctrl+,"),
+            &[
+                "preferences",
+                "word lists",
+                "abbreviations",
+                "indicators",
+                "shortcuts",
+                "keys",
+            ],
+            Command::Settings,
         ),
     ];
     if has_puzzle {

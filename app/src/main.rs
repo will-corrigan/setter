@@ -21,6 +21,7 @@ mod palette;
 mod shell;
 mod state;
 mod updater;
+mod user_lists;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
