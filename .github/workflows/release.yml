@@ -74,6 +74,11 @@ jobs:
 
   # Runs in this workflow, not one triggered by the release: releases made
   # with GITHUB_TOKEN don't start other workflows.
+  #
+  # dx builds the app (setter.exe and its assets); Velopack's vpk packs that
+  # folder into Setter-win-Setup.exe plus the update packages the installed app
+  # downloads (see app/src/updater.rs). vpk's version must match the velopack
+  # crate in app/Cargo.toml.
   windows:
     name: Windows installer
     needs: release
@@ -89,21 +94,47 @@ jobs:
         shell: bash
     env:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release.outputs.tag }}
+      VPK_VERSION: "1.2.161"
+      REPO_URL: https://github.com/${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.TAG || github.ref }}
       - uses: jdx/mise-action@v4
-      - name: Build the installer
+      - name: Build the app
         working-directory: app
-        run: dx bundle --platform desktop --release --package-types nsis --out-dir ../dist
+        run: dx build --platform desktop --release
+      - name: Work out the version and the app's folder
+        run: |
+          version="${TAG#v}"
+          if [ -z "$version" ]; then
+            version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          fi
+          exe=$(find target/dx -path '*release*' -name setter.exe | head -n 1)
+          [ -n "$exe" ] || { echo "::error::setter.exe not found under target/dx"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "APP_DIR=$(dirname "$exe")" >> "$GITHUB_ENV"
+          ls "$(dirname "$exe")"
+      - name: Install vpk
+        run: |
+          dotnet tool install -g vpk --version "$VPK_VERSION"
+          echo "$USERPROFILE\.dotnet\tools" >> "$GITHUB_PATH"
+      - name: Fetch the previous release, for smaller updates
+        if: env.TAG != ''
+        run: vpk download github --repoUrl "$REPO_URL" --token "$GH_TOKEN" || echo "No earlier Velopack release."
+      - name: Pack
+        run: >-
+          vpk pack --packId Setter --packVersion "$VERSION" --packDir "$APP_DIR"
+          --mainExe setter.exe --packTitle Setter --packAuthors "Will Corrigan"
+          --icon app/icons/icon.ico --outputDir Releases --noPortable
       - name: Keep it with the run
         uses: actions/upload-artifact@v4
         with:
-          name: setter-windows-installer
-          path: dist/*.exe
+          name: setter-windows
+          path: Releases/
       - name: Attach it to the release
         if: env.TAG != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" dist/*.exe --clobber
+        run: >-
+          vpk upload github --repoUrl "$REPO_URL" --token "$GH_TOKEN"
+          --tag "$TAG" --merge --publish --releaseName "Setter $VERSION"

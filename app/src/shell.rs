@@ -19,6 +19,7 @@ use crate::pages::home::Home;
 use crate::pages::write_clues::WriteClues;
 use crate::palette::{self, Command, Target};
 use crate::state::{self, AppState, Mode, Shortcut};
+use crate::updater;
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -65,6 +66,13 @@ pub fn warning_line(warnings: &[String]) -> Option<String> {
 /// fresh sample if there isn't one.
 pub fn use_startup(state: AppState) {
     use_hook(|| {
+        // A newer release downloads quietly; the top bar offers it when ready.
+        spawn(async move {
+            if let Ok(Some(version)) = tokio::task::spawn_blocking(updater::fetch).await {
+                let mut ready = state.update_ready;
+                ready.set(Some(version));
+            }
+        });
         spawn(async move {
             let warnings = tokio::task::spawn_blocking(|| state::engine().warnings.clone());
             spawn(async move {
@@ -204,6 +212,13 @@ pub fn save_or_keep(state: AppState) -> Result<(), String> {
         }
         format!("{e}. Use Save as to keep it somewhere else.")
     })
+}
+
+/// Save, then install the downloaded update and start the new version.
+fn restart_to_update(mut state: AppState) {
+    if let Err(e) = save_or_keep(state).and_then(|()| updater::restart_now()) {
+        state.notice.set(Some(e));
+    }
 }
 
 /// Open a puzzle chosen on Home.
@@ -858,6 +873,15 @@ fn TopBar() -> Element {
                     },
                 }
                 }
+                if let Some(version) = (state.update_ready)() {
+                    button {
+                        class: "topbar__update",
+                        r#type: "button",
+                        title: updater::ready_tip(&version),
+                        onclick: move |_| restart_to_update(state),
+                        "Restart to update"
+                    }
+                }
                 button {
                     class: "topbar__search",
                     r#type: "button",
@@ -922,6 +946,21 @@ mod tests {
                 .unwrap_or_else(|| panic!("{piece} missing or out of order: {html}"));
             from += at;
         }
+    }
+
+    #[test]
+    fn a_downloaded_update_is_offered_in_the_top_bar() {
+        let none = shell(|state| state.show(puzzle(), None));
+        assert!(!none.contains("topbar__update"), "{none}");
+        let ready = shell(|mut state| {
+            state.show(puzzle(), None);
+            state.update_ready.set(Some("0.2.0".into()));
+        });
+        assert!(ready.contains(">Restart to update<"), "{ready}");
+        assert!(
+            ready.contains(r#"title="Setter 0.2.0 is ready""#),
+            "{ready}"
+        );
     }
 
     #[test]

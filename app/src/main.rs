@@ -20,6 +20,7 @@ mod pages;
 mod palette;
 mod shell;
 mod state;
+mod updater;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
@@ -78,6 +79,9 @@ pub fn window_title(puzzle_title: &str, app: &str) -> String {
 }
 
 fn main() {
+    // First, before anything else: Velopack's install, update and uninstall
+    // steps run through here and may end the process.
+    velopack::VelopackApp::build().run();
     let (width, height) = window_size();
     let cfg = Config::new()
         .with_custom_head(files::theme_head(files::load_settings().theme))
@@ -140,6 +144,7 @@ fn App() -> Element {
         } = event
         {
             let _ = shell::write_autosave_now(state);
+            updater::install_on_exit();
         }
     });
     // The window's title names the puzzle, for the taskbar and switching.

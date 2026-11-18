@@ -537,6 +537,8 @@ pub struct AppState {
     pub home: Signal<bool>,
     /// The command palette is open.
     pub palette_open: Signal<bool>,
+    /// A newer version, downloaded and ready to install.
+    pub update_ready: Signal<Option<String>>,
     /// How many puzzles have been shown: work started for one puzzle checks
     /// it is still on screen before it lands.
     pub shown_count: Signal<u64>,
@@ -629,6 +631,7 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         credits: use_signal(|| false),
         home: use_signal(|| false),
         palette_open: use_signal(|| false),
+        update_ready: use_signal(|| None),
         shown_count: use_signal(|| 0),
         ready,
         answer,
