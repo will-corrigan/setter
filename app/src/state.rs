@@ -339,6 +339,24 @@ pub fn theme_script(theme: Theme) -> &'static str {
     }
 }
 
+// ---------- updates ----------
+
+/// Where updating has got to (see `crate::updater`).
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub enum Update {
+    /// Not checked yet, or this copy can't update itself.
+    #[default]
+    Unknown,
+    /// Checked: this is the latest version.
+    UpToDate,
+    /// A newer version is out; the setter is asked before anything happens.
+    Available(String),
+    /// The setter chose to update: it's downloading.
+    Downloading(String),
+    /// Downloaded and ready to install on restart.
+    Ready(String),
+}
+
 // ---------- keyboard shortcuts ----------
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -533,10 +551,11 @@ pub struct AppState {
     pub palette_open: Signal<bool>,
     /// Settings is showing, at this section.
     pub settings_page: Signal<Option<crate::pages::settings::Section>>,
-    /// A newer version, downloaded and ready to install.
-    pub update_ready: Signal<Option<String>>,
-    /// This installed copy has checked and is the newest version.
-    pub up_to_date: Signal<bool>,
+    /// Where updating has got to.
+    pub update: Signal<Update>,
+    /// "Later" was chosen for the update on offer: don't show it again until
+    /// the next launch or check.
+    pub update_later: Signal<bool>,
     /// How many puzzles have been shown: work started for one puzzle checks
     /// it is still on screen before it lands.
     pub shown_count: Signal<u64>,
@@ -630,8 +649,8 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         home: use_signal(|| false),
         palette_open: use_signal(|| false),
         settings_page: use_signal(|| None),
-        update_ready: use_signal(|| None),
-        up_to_date: use_signal(|| false),
+        update: use_signal(|| Update::Unknown),
+        update_later: use_signal(|| false),
         shown_count: use_signal(|| 0),
         ready,
         answer,

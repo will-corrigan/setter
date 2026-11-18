@@ -6,7 +6,7 @@ use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::prose::Prose;
 use crate::files;
 use crate::shell;
-use crate::state::AppState;
+use crate::state::{AppState, Update};
 use crate::updater;
 use dioxus::prelude::*;
 use std::collections::HashSet;
@@ -132,16 +132,38 @@ pub fn About() -> Element {
                         h1 { "Setter" }
                         div { class: "about__meta",
                             "Version {version}"
-                            if let Some(next) = (state.update_ready)() {
-                                button {
-                                    class: "topbar__update",
-                                    r#type: "button",
-                                    title: updater::ready_tip(&next),
-                                    onclick: move |_| shell::restart_to_update(state),
-                                    "Restart to update"
-                                }
-                            } else if (state.up_to_date)() {
-                                span { class: "about__current", "✓ Up to date" }
+                            match (state.update)() {
+                                Update::Ready(next) => rsx! {
+                                    button {
+                                        class: "topbar__update",
+                                        r#type: "button",
+                                        title: updater::ready_tip(&next),
+                                        onclick: move |_| shell::restart_to_update(state),
+                                        "Restart to update"
+                                    }
+                                },
+                                Update::Available(next) => rsx! {
+                                    button {
+                                        class: "topbar__update",
+                                        r#type: "button",
+                                        onclick: move |_| shell::download_update(state, next.clone(), true),
+                                        "Update to {next}"
+                                    }
+                                },
+                                Update::Downloading(next) => rsx! {
+                                    span { class: "about__current", "Downloading {next}…" }
+                                },
+                                Update::UpToDate => rsx! {
+                                    span { class: "about__current", "✓ Up to date" }
+                                },
+                                Update::Unknown => rsx! {
+                                    button {
+                                        class: "list-editor__link",
+                                        r#type: "button",
+                                        onclick: move |_| shell::check_for_updates(state, true),
+                                        "Check for updates"
+                                    }
+                                },
                             }
                         }
                     }

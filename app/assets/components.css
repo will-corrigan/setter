@@ -71,6 +71,9 @@ button, input, textarea { font: inherit; color: inherit; }
   font-size: var(--text-sm);
 }
 .notice__text { min-width: 0; overflow-wrap: anywhere; }
+/* An update on offer: the message, then its actions together on the right. */
+.notice--update { justify-content: flex-start; background: var(--p1-bg); }
+.notice--update > .notice__text { margin-right: auto; }
 
 /* ---------- side navigation (device list) ---------- */
 .side-nav { background: var(--surface); border-right: var(--border) solid var(--line); padding: var(--space-3) var(--space-2); overflow-x: hidden; overflow-y: auto; }

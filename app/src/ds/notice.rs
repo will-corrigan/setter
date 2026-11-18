@@ -18,6 +18,31 @@ pub fn Notice(#[props(into)] message: String, on_dismiss: EventHandler<()>) -> E
     }
 }
 
+/// A newer version is out: what's new, Update, Later. Without the handlers
+/// (while it downloads) it's just the message.
+#[component]
+pub fn UpdateBanner(
+    #[props(into)] message: String,
+    on_notes: Option<EventHandler<()>>,
+    on_update: Option<EventHandler<()>>,
+    on_later: Option<EventHandler<()>>,
+) -> Element {
+    rsx! {
+        div { class: "notice notice--update", role: "status",
+            span { class: "notice__text", "{message}" }
+            if let Some(on_notes) = on_notes {
+                button { class: "list-editor__link", r#type: "button", onclick: move |_| on_notes.call(()), "What's new" }
+            }
+            if let Some(on_update) = on_update {
+                Button { variant: ButtonVariant::Primary, size: ButtonSize::Xs, onclick: move |_| on_update.call(()), "Update" }
+            }
+            if let Some(on_later) = on_later {
+                Button { variant: ButtonVariant::Ghost, size: ButtonSize::Xs, onclick: move |_| on_later.call(()), "Later" }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
