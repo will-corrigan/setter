@@ -76,6 +76,24 @@ pub fn filled_count(p: &Puzzle) -> (usize, usize) {
     (filled, lights.len())
 }
 
+/// The next answer after `current` with no clue yet, wrapping round; `None`
+/// if every answer has one.
+pub fn next_unclued(list: &[Answer], p: &Puzzle, current: &str) -> Option<String> {
+    let n = list.len();
+    let start = list
+        .iter()
+        .position(|a| a.light_id == current)
+        .map_or(0, |i| i + 1);
+    (0..n)
+        .map(|k| &list[(start + k) % n])
+        .find(|a| {
+            p.clues
+                .get(&a.light_id)
+                .is_none_or(|c| c.text.trim().is_empty())
+        })
+        .map(|a| a.light_id.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +152,24 @@ mod tests {
             },
         );
         assert_eq!(clued_count(&p), (1, 4));
+    }
+
+    #[test]
+    fn next_unclued_skips_clued_answers_and_wraps() {
+        let mut p = Puzzle::new(3, 3);
+        p.grid = xw_engine::grid::Grid::from_rows(&["cat", "a#o", "bye"]);
+        let list = answers(&p);
+        let ids: Vec<&str> = list.iter().map(|a| a.light_id.as_str()).collect();
+        p.clues.entry(ids[1].into()).or_default().text = "Farewell".into();
+        assert_eq!(next_unclued(&list, &p, ids[0]).as_deref(), Some(ids[2]));
+        assert_eq!(
+            next_unclued(&list, &p, ids[3]).as_deref(),
+            Some(ids[0]),
+            "wraps round"
+        );
+        for id in &ids {
+            p.clues.entry((*id).into()).or_default().text = "x".into();
+        }
+        assert_eq!(next_unclued(&list, &p, ids[0]), None);
     }
 }

@@ -18,12 +18,16 @@ pub fn TemplatePicker(
     /// A grid was chosen; this is its place in `grids`.
     on_pick: EventHandler<usize>,
     on_close: EventHandler<()>,
+    /// The size to show first; the biggest if not given.
+    #[props(default)]
+    size: Option<usize>,
 ) -> Element {
     // The sizes on offer, smallest first; the biggest is shown to start with.
     let mut sizes: Vec<usize> = grids.iter().map(|g| g.rows.len()).collect();
     sizes.sort_unstable();
     sizes.dedup();
-    let mut size = use_signal(|| sizes.last().copied().unwrap_or(0));
+    let first = size.filter(|n| sizes.contains(n));
+    let mut size = use_signal(|| first.or(sizes.last().copied()).unwrap_or(0));
     let shown: Vec<(usize, GridThumb)> = grids
         .into_iter()
         .enumerate()

@@ -2,6 +2,7 @@
 //! sheet on the right, with the words popover and the template picker over
 //! them.
 
+use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::answer_bar::AnswerBar;
 use crate::ds::clue_sheet::ClueSheet;
 use crate::ds::crossword_grid::{CrosswordGrid, GridKey};
@@ -81,6 +82,7 @@ fn with_grid<R>(state: AppState, read: impl FnOnce(&Grid) -> R) -> Option<R> {
 fn free(state: AppState) -> bool {
     *state.mode.peek() == Mode::BuildGrid
         && !*state.credits.peek()
+        && !*state.home.peek()
         && !*state.filling.peek()
         && !*state.build.working.peek()
         && !*state.build.picker_open.peek()
@@ -139,14 +141,25 @@ pub fn toggle_words(state: AppState) {
 
 // ---------- editing ----------
 
+/// Can undo and redo act now? On either page, but not while a fill runs,
+/// behind the template picker, or with Home or the credits showing.
+fn can_travel(state: AppState) -> bool {
+    !*state.credits.peek()
+        && !*state.home.peek()
+        && !*state.filling.peek()
+        && !*state.build.working.peek()
+        && !*state.build.picker_open.peek()
+        && state.puzzle.peek().is_some()
+}
+
 pub fn undo(state: AppState) {
-    if free(state) {
+    if can_travel(state) {
         state.undo();
     }
 }
 
 pub fn redo(state: AppState) {
-    if free(state) {
+    if can_travel(state) {
         state.redo();
     }
 }
@@ -158,9 +171,14 @@ pub fn key(state: AppState, key: GridKey) {
     }
     let c = *state.build.cursor.peek();
     let next = match key {
-        GridKey::Letter(ch) => state.edit(|p| grid_edit::type_letter(p, c, ch)),
-        GridKey::Backspace => state.edit(|p| grid_edit::backspace(p, c)),
-        GridKey::Delete => state.edit(|p| grid_edit::delete(p, c)),
+        // Letters typed into one answer undo together, as a word.
+        GridKey::Letter(ch) => state.edit_grouped(Some(&typing(state, c)), |p| {
+            grid_edit::type_letter(p, c, ch)
+        }),
+        GridKey::Backspace => {
+            state.edit_grouped(Some(&typing(state, c)), |p| grid_edit::backspace(p, c))
+        }
+        GridKey::Delete => state.edit_grouped(Some(&typing(state, c)), |p| grid_edit::delete(p, c)),
         GridKey::Move(rows, columns) => with_grid(state, |g| grid_edit::arrow(g, c, rows, columns)),
         GridKey::Turn => with_grid(state, |g| grid_edit::click(g, c, c.cell)),
         GridKey::NextAnswer => with_grid(state, |g| grid_edit::next_light(g, c, 1)),
@@ -223,6 +241,18 @@ fn move_on(state: AppState) {
     }
     close_words(state);
     focus_grid();
+}
+
+/// The undo group for typing at the cursor: the answer being typed in.
+fn typing(state: AppState, c: Cursor) -> String {
+    let light = state
+        .puzzle
+        .peek()
+        .as_ref()
+        .and_then(|p| grid_edit::current_light(&p.grid, c))
+        .map(|l| l.id)
+        .unwrap_or_default();
+    format!("grid:{light}")
 }
 
 /// A word was picked in the popover.
@@ -295,6 +325,7 @@ async fn run_fill(
     let Some(puzzle) = state.puzzle.peek().clone() else {
         return false;
     };
+    let shown = *state.shown_count.peek();
     let stop = Arc::new(AtomicBool::new(false));
     state.build.stop.set(stop.clone());
     state.build.working.set(true);
@@ -317,6 +348,10 @@ async fn run_fill(
     // Before the guard goes: it raises the flag too.
     let stopped = stop.load(Ordering::Relaxed);
     drop(busy);
+    if *state.shown_count.peek() != shown {
+        // Another puzzle is on screen now: this fill was for the old one.
+        return false;
+    }
     match done {
         Ok(Ok((filled, rare))) => {
             take_fill(state, &filled);
@@ -417,6 +452,8 @@ fn add_word(mut state: AppState, light_id: &str) {
 fn start_on(state: AppState, template: usize) {
     if let Some(t) = TEMPLATES.get(template) {
         state.show(state.signed(grid_fill::new_puzzle(t.rows)), None);
+        // A new grid is filled before it is clued, wherever it was started.
+        state.set_mode(Mode::BuildGrid);
         focus_grid();
     }
 }
@@ -581,12 +618,34 @@ fn Bar() -> Element {
         return rsx! {};
     };
     let split = grid_fill::split_of(p, &light.id);
+    let (filled, total) = (state.filled)();
+    let working = (state.build.working)();
     rsx! {
-        AnswerBar {
-            label: light_name(&light),
-            pattern: grid_view::shown_pattern(&p.grid.pattern(&light), split),
-            split: grid_view::split_text(p, &light),
-            on_split: move |text: String| set_split(state, &text),
+        div { class: "build-grid__head",
+            AnswerBar {
+                label: light_name(&light),
+                pattern: grid_view::shown_pattern(&p.grid.pattern(&light), split),
+                split: grid_view::split_text(p, &light),
+                on_split: move |text: String| set_split(state, &text),
+            }
+            if working {
+                Button {
+                    variant: ButtonVariant::Outline,
+                    size: ButtonSize::Sm,
+                    onclick: move |_| stop_fill(state),
+                    "Stop filling"
+                }
+            } else {
+                Button {
+                    variant: ButtonVariant::Primary,
+                    size: ButtonSize::Sm,
+                    disabled: filled == total,
+                    onclick: move |_| {
+                        spawn_forever(fill_rest(state));
+                    },
+                    "Fill the rest"
+                }
+            }
         }
     }
 }
@@ -705,7 +764,7 @@ fn Clues() -> Element {
 
 /// The template picker, while it is open.
 #[component]
-fn Picker() -> Element {
+pub fn Picker() -> Element {
     let mut state = use_context::<AppState>();
     if !(state.build.picker_open)() {
         return rsx! {};
@@ -721,9 +780,11 @@ fn Picker() -> Element {
         TemplatePicker {
             title: "New puzzle",
             grids,
+            size: (state.build.picker_size)(),
             on_pick: move |i| start_on(state, i),
             on_close: move |_| {
                 state.build.picker_open.set(false);
+                state.build.picker_size.set(None);
                 focus_grid();
             },
         }

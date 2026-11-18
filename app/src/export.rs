@@ -14,9 +14,6 @@ pub enum ExportFormat {
 }
 
 impl ExportFormat {
-    pub const ALL: [ExportFormat; 3] =
-        [ExportFormat::WebPage, ExportFormat::Puz, ExportFormat::Ipuz];
-
     pub fn label(self) -> &'static str {
         match self {
             ExportFormat::WebPage => "Web page (.html)",

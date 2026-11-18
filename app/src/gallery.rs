@@ -7,14 +7,17 @@ use crate::ds::answer_nav::AnswerNav;
 use crate::ds::chip::Chip;
 use crate::ds::clue_field::ClueField;
 use crate::ds::clue_sheet::ClueSheet;
+use crate::ds::command_palette::{CommandPalette, PaletteGroup, PaletteItem};
 use crate::ds::crossword_grid::{CrosswordGrid, GridKey};
 use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
 use crate::ds::inline_edit::InlineEdit;
-use crate::ds::menu_button::MenuButton;
+use crate::ds::menu_button::{MenuButton, MenuItem};
+use crate::ds::mini_grid::{MiniGrid, MiniSize};
 use crate::ds::note::Note;
 use crate::ds::notice::Notice;
 use crate::ds::prose::Prose;
+use crate::ds::puzzle_list::{PuzzleList, PuzzleRow, SizeChoice, SizeTiles};
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
 use crate::ds::side_nav::{NavItem, SideNav};
@@ -56,6 +59,13 @@ fn device(kind: DeviceKind) -> &'static DeviceView {
 
 /// A small part-filled puzzle with a two-word answer, a hyphened answer and
 /// two clues, for the Build grid components.
+/// A British lattice: blocks where both row and column are odd.
+fn lattice(n: usize) -> Vec<bool> {
+    (0..n * n)
+        .map(|i| (i / n) % 2 == 1 && (i % n) % 2 == 1)
+        .collect()
+}
+
 fn sample_puzzle() -> Puzzle {
     let mut p = Puzzle::new(7, 7);
     p.grid = Grid::from_rows(&[
@@ -250,9 +260,60 @@ fn Showcase(scope: &'static str) -> Element {
                 div { class: "gallery__row",
                     MenuButton {
                         label: "Export",
-                        items: vec!["Web page (.html)".to_string(), "Across Lite (.puz)".to_string(), "ipuz (.ipuz)".to_string()],
+                        items: vec![
+                            MenuItem::new("Open…").keys("Ctrl+O"),
+                            MenuItem::new("Save as…").keys("Ctrl+Shift+S"),
+                            MenuItem::new("Export web page…").separated(),
+                            MenuItem::new("Show in folder").disabled(true),
+                            MenuItem::heading("Recent"),
+                            MenuItem::new("Prize puzzle 12"),
+                        ],
                         on_pick: move |_| {},
                     }
+                }
+            }
+            Section { title: "Command palette",
+                div { class: "gallery__palette",
+                    CommandPalette {
+                        query: "ex",
+                        groups: vec![PaletteGroup {
+                            title: "Commands".into(),
+                            items: vec![PaletteItem { label: "Export web page…".into(), marks: vec![(0, 2)], detail: String::new(), keys: Some("Ctrl+E".into()) }],
+                        }],
+                        active: 0,
+                        on_query: move |_| {},
+                        on_move: move |_| {},
+                        on_run: move |_| {},
+                        on_close: move |_| {},
+                    }
+                }
+            }
+            Section { title: "Mini grid",
+                div { class: "gallery__row",
+                    MiniGrid { columns: 5, blocks: lattice(5), lit: vec![0, 1, 2, 3, 4], current: Some(0), size: MiniSize::Medium }
+                    MiniGrid { columns: 5, blocks: lattice(5), size: MiniSize::Small }
+                    MiniGrid { columns: 5, blocks: lattice(5) }
+                }
+            }
+            Section { title: "Size tiles",
+                SizeTiles {
+                    sizes: vec![SizeChoice { side: 5, blocks: lattice(5) }, SizeChoice { side: 7, blocks: lattice(7) }],
+                    on_pick: move |_| {},
+                }
+            }
+            Section { title: "Puzzle list",
+                PuzzleList {
+                    rows: vec![PuzzleRow {
+                        title: "Prize puzzle 12".into(),
+                        detail: "Quixote · 5×5".into(),
+                        columns: 5,
+                        blocks: lattice(5),
+                        filled: (6, 6),
+                        clued: (4, 6),
+                        edited: "2 minutes ago".into(),
+                    }],
+                    on_open: move |_| {},
+                    on_action: move |_| {},
                 }
             }
             Section { title: "Inline edit",
@@ -327,6 +388,10 @@ fn Showcase(scope: &'static str) -> Element {
                     }
                     Icon { name: IconName::Wand }
                     Icon { name: IconName::Eraser }
+                    Icon { name: IconName::Undo }
+                    Icon { name: IconName::Redo }
+                    Icon { name: IconName::Settings }
+                    Icon { name: IconName::Search }
                 }
             }
             Section { title: "Answer bar",
@@ -451,6 +516,10 @@ mod tests {
             "template-picker__thumb",
             "menu-button__trigger",
             "inline-edit",
+            "mini-grid",
+            "size-tiles__tile",
+            "puzzle-list__row",
+            "palette__item",
         ] {
             assert!(html.contains(class), "missing {class}");
         }

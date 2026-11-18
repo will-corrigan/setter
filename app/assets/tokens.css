@@ -165,11 +165,28 @@
 
   /* ---------- layout ---------- */
   --sidebar-width: 178px;
+  --rail-width: 220px;
+  --rail-grid: 182px;
+  --bank-filter-width: 260px;
   --column-min: 180px;
   --column-max-height: 430px;
   --tile-size: 28px;
   --empty-min-height: 200px;
   --dragging-opacity: 0.35;
+  --mini-cell-tiny: 3px;     /* home list thumbnails */
+  --mini-cell-small: 6px;    /* size tiles */
+  --mini-cell-medium: 13px;  /* the Write clues grid */
+  --size-tile-width: 132px;
+  --size-tile-grid: 84px;
+  --progress-width: 160px;
+  --progress-height: 5px;
+  --edited-width: 110px;
+  --home-width: 920px;
+  --filter-width: 220px;
+  --palette-width: 600px;
+  --palette-top: 96px;
+  --search-width: 180px;
+  --gallery-palette-height: 220px;
   --menu-min-width: 180px;
   --answer-nav-width: 220px; /* room for a 15-letter answer and its label */
   --icon-size: 16px;

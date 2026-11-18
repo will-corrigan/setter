@@ -5,7 +5,7 @@ use crate::clue_draft;
 use crate::ds::word_popover::WordEntry;
 use crate::files::{self, EngineData, Settings, Theme};
 use crate::grid_edit::{self, Cursor};
-use crate::grid_fill::{self, Snap};
+use crate::grid_fill;
 use crate::grid_view::Room;
 use crate::history::History;
 use dioxus::prelude::*;
@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
+use std::time::Instant;
 use xw_engine::bank::{self, Column, DeviceKind, DeviceOption, DeviceView, Tile, Tone};
 use xw_engine::fill::{FillIndex, FillOptions, WordCount};
 use xw_engine::puzzle::{Clue, Puzzle};
@@ -297,20 +298,6 @@ pub fn marks(
 
 // ---------- the answer as text and tiles ----------
 
-/// The answer in capitals for the navigator, blanks as a middle dot.
-pub fn answer_letters(pattern: &str) -> String {
-    pattern
-        .chars()
-        .map(|c| {
-            if c == '?' {
-                '·'
-            } else {
-                c.to_ascii_uppercase()
-            }
-        })
-        .collect()
-}
-
 /// The answer as uncoloured tiles (blank squares stay blank).
 pub fn plain_tiles(pattern: &str) -> Vec<Tile> {
     vec![Tile {
@@ -321,22 +308,6 @@ pub fn plain_tiles(pattern: &str) -> Vec<Tile> {
 }
 
 // ---------- theme ----------
-
-pub fn next_theme(theme: Theme) -> Theme {
-    match theme {
-        Theme::System => Theme::Light,
-        Theme::Light => Theme::Dark,
-        Theme::Dark => Theme::System,
-    }
-}
-
-pub fn theme_label(theme: Theme) -> &'static str {
-    match theme {
-        Theme::System => "Theme: system",
-        Theme::Light => "Theme: light",
-        Theme::Dark => "Theme: dark",
-    }
-}
 
 /// JavaScript that applies a theme to the page.
 pub fn theme_script(theme: Theme) -> &'static str {
@@ -355,8 +326,14 @@ pub enum Shortcut {
     NextAnswer,
     Save,
     SaveAs,
+    New,
+    Open,
+    Export,
     Undo,
     Redo,
+    /// Open or close the command palette.
+    Palette,
+    NextUnclued,
     /// Open or close the words popover.
     Words,
 }
@@ -371,11 +348,16 @@ impl Shortcut {
 
 /// (key, Alt held, Ctrl held, Shift held, action). The page's key listener
 /// and `shortcut` both read this table.
-pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 7] = [
+pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 12] = [
     ("arrowleft", true, false, false, Shortcut::PreviousAnswer),
     ("arrowright", true, false, false, Shortcut::NextAnswer),
     ("s", false, true, false, Shortcut::Save),
     ("s", false, true, true, Shortcut::SaveAs),
+    ("n", false, true, false, Shortcut::New),
+    ("o", false, true, false, Shortcut::Open),
+    ("e", false, true, false, Shortcut::Export),
+    ("k", false, true, false, Shortcut::Palette),
+    ("j", false, true, false, Shortcut::NextUnclued),
     ("z", false, true, false, Shortcut::Undo),
     ("z", false, true, true, Shortcut::Redo),
     (" ", false, true, false, Shortcut::Words),
@@ -402,7 +384,7 @@ pub fn shortcut_script() -> String {
         "const combos = [{}];\
          document.addEventListener('keydown', (e) => {{\
            const key = e.key.toLowerCase(), alt = e.altKey, ctrl = e.ctrlKey || e.metaKey, shift = e.shiftKey;\
-           const typing = !!(e.target.closest && e.target.closest('input, textarea, [contenteditable=true]'));\
+           const typing = !!(e.target.closest && e.target.closest('input, textarea, [contenteditable=true]')) && !(e.target.closest && e.target.closest('.clue-field__editor'));\
            if (combos.some(([k, a, c, s, t]) => k === key && a === alt && c === ctrl && s === shift && (t || !typing))) {{\
              e.preventDefault();\
              dioxus.send([key, alt, ctrl, shift]);\
@@ -430,6 +412,20 @@ pub fn unsaved(puzzle: Option<&Puzzle>, pristine: Option<&Puzzle>) -> bool {
 
 /// A word bank per answer pattern, kept so going back to an answer is instant.
 pub type Banks = HashMap<String, Rc<Vec<DeviceView>>>;
+
+/// Everything undo brings back: the puzzle, the picks, and where you were.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Snap {
+    puzzle: Puzzle,
+    picks: Picks,
+    selection: Selection,
+    cursor: Cursor,
+    mode: Mode,
+    /// Explanations written by picks, so they keep following picks after undo.
+    auto_notes: HashMap<String, String>,
+    /// Where the definition goes, so undoing the switch flips it back.
+    definition_last: bool,
+}
 
 /// What the word bank has for the selection on screen.
 pub struct Shown {
@@ -465,8 +461,6 @@ pub struct Found {
 pub struct BuildState {
     /// The selected square, and the direction being filled.
     pub cursor: Signal<Cursor>,
-    /// Grid changes that can be undone and redone.
-    pub history: Signal<History<Snap>>,
     /// The words popover is showing.
     pub words_open: Signal<bool>,
     /// What is typed in the popover's search box.
@@ -479,6 +473,8 @@ pub struct BuildState {
     pub found: Signal<Option<Found>>,
     /// The template picker is showing.
     pub picker_open: Signal<bool>,
+    /// The grid size the picker opens at, if one was chosen on Home.
+    pub picker_size: Signal<Option<usize>>,
     /// The status under the grid, once worked out.
     pub status: Signal<Option<GridStatus>>,
     /// A fill is running; the grid waits for it.
@@ -500,6 +496,8 @@ pub struct AppState {
     /// The puzzle as it was when last shown or saved; `None` for recovered
     /// work. Autosave keeps whatever differs from it.
     pub pristine: Signal<Option<Puzzle>>,
+    /// Changes that can be undone and redone: the grid, the clues, the picks.
+    pub history: Signal<History<Snap>>,
     /// Each clue's explanation as the picks last wrote it; one the setter has
     /// changed since is theirs and left alone.
     pub auto_notes: Signal<HashMap<String, String>>,
@@ -514,6 +512,13 @@ pub struct AppState {
     pub filling: Signal<bool>,
     /// The credits are showing instead of the page.
     pub credits: Signal<bool>,
+    /// Home is showing: the list of puzzles, instead of a puzzle.
+    pub home: Signal<bool>,
+    /// The command palette is open.
+    pub palette_open: Signal<bool>,
+    /// How many puzzles have been shown: work started for one puzzle checks
+    /// it is still on screen before it lands.
+    pub shown_count: Signal<u64>,
     /// There is a puzzle to show, and no new one on its way.
     pub ready: Memo<bool>,
     /// The answer on screen.
@@ -523,6 +528,29 @@ pub struct AppState {
     /// (answers with every square filled, all answers)
     pub filled: Memo<(usize, usize)>,
     pub build: BuildState,
+}
+
+/// The answer through `cell`: the one going the way `current` goes if two
+/// cross there; the other if `current` is already that one.
+pub fn light_through(
+    lights: &[xw_engine::grid::Light],
+    cell: usize,
+    current: &str,
+) -> Option<String> {
+    let through: Vec<&xw_engine::grid::Light> =
+        lights.iter().filter(|l| l.cells.contains(&cell)).collect();
+    let same_way = current.ends_with(",a");
+    let here = through.iter().find(|l| l.id == current);
+    let pick = match here {
+        // Clicking inside the answer on screen: keep it.
+        Some(l) => Some(*l),
+        None => through
+            .iter()
+            .find(|l| (l.dir == xw_engine::grid::Dir::Across) == same_way)
+            .or(through.first())
+            .copied(),
+    };
+    pick.map(|l| l.id.clone())
 }
 
 /// Create the app state and share it with every component below.
@@ -563,13 +591,13 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
             cell: 0,
             dir: xw_engine::grid::Dir::Across,
         }),
-        history: use_signal(|| History::new(grid_fill::UNDO_STEPS)),
         words_open: use_signal(|| false),
         query: use_signal(String::new),
         words: use_signal(WordCount::default),
         room: use_signal(Room::default),
         found: use_signal(|| None),
         picker_open: use_signal(|| false),
+        picker_size: use_signal(|| None),
         status: use_signal(|| None),
         working: use_signal(|| false),
         stop: use_signal(|| Arc::new(std::sync::atomic::AtomicBool::new(false))),
@@ -581,6 +609,7 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         dirty,
         pristine,
         auto_notes: use_signal(HashMap::new),
+        history: use_signal(|| History::new(grid_fill::UNDO_STEPS)),
         mode: use_signal(|| Mode::WriteClues),
         selection,
         picks: use_signal(Picks::new),
@@ -589,6 +618,9 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         notice: use_signal(|| None),
         filling,
         credits: use_signal(|| false),
+        home: use_signal(|| false),
+        palette_open: use_signal(|| false),
+        shown_count: use_signal(|| 0),
         ready,
         answer,
         clued,
@@ -603,6 +635,15 @@ impl AppState {
     /// Show a puzzle, starting at its first answer, as the clean copy: it
     /// matches the file at `path`, or is new.
     pub fn show(mut self, puzzle: Puzzle, path: Option<PathBuf>) {
+        // A fill still running was for the puzzle going away: stop it, and
+        // let its result know it is too late.
+        self.build
+            .stop
+            .peek()
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        *self.shown_count.write() += 1;
+        // A sample still being made is no longer wanted either.
+        self.filling.set(false);
         let first = answers::answers(&puzzle)
             .first()
             .map(|a| a.light_id.clone())
@@ -610,9 +651,11 @@ impl AppState {
         self.picks.write().clear();
         self.selection.set(Selection::at(first));
         self.build.cursor.set(grid_fill::start_cursor(&puzzle.grid));
-        self.build.history.set(History::new(grid_fill::UNDO_STEPS));
+        self.history.set(History::new(grid_fill::UNDO_STEPS));
         self.build.words_open.set(false);
         self.build.picker_open.set(false);
+        self.build.picker_size.set(None);
+        self.home.set(false);
         self.build.query.set(String::new());
         self.build.found.set(None);
         self.build.status.set(None);
@@ -644,7 +687,7 @@ impl AppState {
     }
 
     pub fn set_title(self, title: String) {
-        self.change_details(|p| p.title = title);
+        self.change(Some("title"), |s| s.change_details(|p| p.title = title));
     }
 
     /// The setter's name, kept for new puzzles too.
@@ -653,7 +696,7 @@ impl AppState {
             self.settings.write().setter_name = name.clone();
             files::save_settings(&self.settings.peek());
         }
-        self.change_details(|p| p.author = name);
+        self.change(Some("setter"), |s| s.change_details(|p| p.author = name));
     }
 
     fn change_details(mut self, change: impl FnOnce(&mut Puzzle)) {
@@ -689,21 +732,62 @@ impl AppState {
         self.mode.set(mode);
     }
 
-    /// Change the grid. What it was before goes on the undo stack and the
-    /// puzzle counts as unsaved, unless the change left everything as it was.
-    pub fn edit<R>(mut self, change: impl FnOnce(&mut Puzzle) -> R) -> Option<R> {
-        let cursor = *self.build.cursor.peek();
-        let mut puzzle = self.puzzle.peek().clone()?;
-        let before = grid_fill::snapshot(&puzzle, cursor);
-        let result = change(&mut puzzle);
-        if grid_fill::snapshot(&puzzle, cursor) != before {
-            self.build.history.write().push(before);
-            self.puzzle.set(Some(puzzle));
-        }
-        Some(result)
+    /// Change the puzzle. What it was before goes on the undo stack, unless
+    /// the change left everything as it was.
+    pub fn edit<R>(self, change: impl FnOnce(&mut Puzzle) -> R) -> Option<R> {
+        self.edit_grouped(None, change)
     }
 
-    /// Take back the last grid change. Clue text is left alone.
+    /// Like `edit`, but quick changes in the same `group` (typing one
+    /// answer's letters) undo together.
+    pub fn edit_grouped<R>(
+        self,
+        group: Option<&str>,
+        change: impl FnOnce(&mut Puzzle) -> R,
+    ) -> Option<R> {
+        self.change(group, |mut s| {
+            let mut puzzle = s.puzzle.peek().clone()?;
+            let result = change(&mut puzzle);
+            if Some(&puzzle) != s.puzzle.peek().as_ref() {
+                s.puzzle.set(Some(puzzle));
+            }
+            Some(result)
+        })
+    }
+
+    /// The state undo would bring back, as it is now.
+    fn snap(self) -> Option<Snap> {
+        Some(Snap {
+            puzzle: self.puzzle.peek().clone()?,
+            picks: self.picks.peek().clone(),
+            selection: self.selection.peek().clone(),
+            cursor: *self.build.cursor.peek(),
+            mode: *self.mode.peek(),
+            auto_notes: self.auto_notes.peek().clone(),
+            definition_last: self.settings.peek().definition_last,
+        })
+    }
+
+    /// Run `f`; if it changed the puzzle or the picks, what was there before
+    /// becomes an undo step. With a `group`, a quick run of changes in that
+    /// group (typing a clue) is one step.
+    fn change<R>(mut self, group: Option<&str>, f: impl FnOnce(Self) -> R) -> R {
+        let before = self.snap();
+        let result = f(self);
+        let after = self.snap();
+        if let (Some(before), Some(after)) = (before, after) {
+            if before.puzzle != after.puzzle || before.picks != after.picks {
+                let mut history = self.history.write();
+                match group {
+                    Some(g) => history.record(before, g, Instant::now()),
+                    None => history.push(before),
+                }
+            }
+        }
+        result
+    }
+
+    /// Take back the last change, and go back to where it was made.
     pub fn undo(self) {
         self.travel(History::undo);
     }
@@ -713,16 +797,51 @@ impl AppState {
     }
 
     fn travel(mut self, step: fn(&mut History<Snap>, Snap) -> Option<Snap>) {
-        let Some(mut puzzle) = self.puzzle.peek().clone() else {
+        let Some(now) = self.snap() else {
             return;
         };
-        let now = grid_fill::snapshot(&puzzle, *self.build.cursor.peek());
-        let Some(snap) = step(&mut self.build.history.write(), now) else {
+        let Some(snap) = step(&mut self.history.write(), now) else {
             return;
         };
-        grid_fill::restore(&mut puzzle, &snap);
+        self.picks.set(snap.picks);
+        self.selection.set(snap.selection);
         self.build.cursor.set(snap.cursor);
-        self.puzzle.set(Some(puzzle));
+        self.auto_notes.set(snap.auto_notes);
+        if self.settings.peek().definition_last != snap.definition_last {
+            self.settings.write().definition_last = snap.definition_last;
+            files::save_settings(&self.settings.peek());
+        }
+        if *self.mode.peek() != snap.mode {
+            self.build.words_open.set(false);
+            self.mode.set(snap.mode);
+        }
+        self.puzzle.set(Some(snap.puzzle));
+    }
+
+    /// Go to an answer, on whichever page is showing.
+    pub fn go_to(mut self, light: &str) {
+        let cursor = self
+            .puzzle
+            .peek()
+            .as_ref()
+            .and_then(|p| grid_fill::cursor_on(&p.grid, light));
+        if let Some(c) = cursor {
+            self.build.cursor.set(c);
+        }
+        // Already there: keep the device and option chosen for it.
+        if self.selection.peek().light != light {
+            self.selection.set(Selection::at(light));
+        }
+    }
+
+    /// Go to the next answer with no clue yet (stays put if all have one).
+    pub fn next_unclued(self) {
+        let next = self.puzzle.peek().as_ref().and_then(|p| {
+            answers::next_unclued(&answers::answers(p), p, &self.selection.peek().light)
+        });
+        if let Some(light) = next {
+            self.go_to(&light);
+        }
     }
 
     pub fn step(mut self, delta: i32) {
@@ -749,6 +868,18 @@ impl AppState {
         })
     }
 
+    /// Go to the answer through a square of the grid: the one running the
+    /// same way as the answer on screen if there is one, else the other.
+    pub fn select_cell(self, cell: usize) {
+        let light = self.puzzle.peek().as_ref().and_then(|p| {
+            let current = self.selection.peek().light.clone();
+            light_through(&p.grid.lights(), cell, &current)
+        });
+        if let Some(l) = light {
+            self.go_to(&l);
+        }
+    }
+
     pub fn select_device(mut self, device: DeviceKind) {
         let next = self.selection.peek().with_device(device);
         self.selection.set(next);
@@ -762,7 +893,11 @@ impl AppState {
 
     /// Pick or un-pick a word. The clue's explanation follows the picks in
     /// that option, unless the setter has written their own.
-    pub fn toggle_pick(mut self, key: PickKey, item: &str) {
+    pub fn toggle_pick(self, key: PickKey, item: &str) {
+        self.change(None, |s| s.pick_and_place(key, item));
+    }
+
+    fn pick_and_place(mut self, key: PickKey, item: &str) {
         let old = self.picks.peek().get(&key).cloned();
         toggle_pick(&mut self.picks.write(), key.clone(), item);
         let new = self.picks.peek().get(&key).cloned();
@@ -809,7 +944,11 @@ impl AppState {
 
     /// Put picked definitions at the end of clues, or the start, and move
     /// the one in the clue on screen.
-    pub fn set_definition_last(mut self, last: bool) {
+    pub fn set_definition_last(self, last: bool) {
+        self.change(None, |s| s.move_definition_to(last));
+    }
+
+    fn move_definition_to(mut self, last: bool) {
         if self.settings.peek().definition_last != last {
             self.settings.write().definition_last = last;
             files::save_settings(&self.settings.peek());
@@ -843,6 +982,10 @@ impl AppState {
     /// The setter dragged the clue's pieces about: keep their order, and
     /// tidy spaces and capitals.
     pub fn arrange_clue(self, text: String) {
+        self.change(None, |s| s.arrange(text));
+    }
+
+    fn arrange(self, text: String) {
         let light = self.selection.peek().light.clone();
         let picked = self
             .shown()
@@ -872,15 +1015,20 @@ impl AppState {
         self.read_clue(&light, |c| c.annotation.clone())
     }
 
+    /// Typing in the clue. A quick run of typing undoes as one step.
     pub fn set_clue_text(self, text: String) {
         let light = self.selection.peek().light.clone();
-        self.set_clue_field(&light, text, |c| &mut c.text);
+        self.change(Some(&format!("clue:{light}")), |s| {
+            s.set_clue_field(&light, text, |c| &mut c.text)
+        });
     }
 
     /// The setter's own explanation; picks no longer change it.
     pub fn set_clue_note(self, note: String) {
         let light = self.selection.peek().light.clone();
-        self.set_clue_field(&light, note, |c| &mut c.annotation);
+        self.change(Some(&format!("note:{light}")), |s| {
+            s.set_clue_field(&light, note, |c| &mut c.annotation)
+        });
     }
 
     fn read_clue(self, light: &str, get: impl Fn(&Clue) -> String) -> String {
@@ -1162,8 +1310,7 @@ mod tests {
     }
 
     #[test]
-    fn answers_show_blanks_as_dots_and_plain_tiles() {
-        assert_eq!(answer_letters("or?hes?ra"), "OR·HES·RA");
+    fn plain_tiles_keep_blanks() {
         assert_eq!(
             plain_tiles("c?t"),
             vec![Tile {
@@ -1175,14 +1322,10 @@ mod tests {
     }
 
     #[test]
-    fn theme_cycles_system_light_dark() {
-        assert_eq!(next_theme(Theme::System), Theme::Light);
-        assert_eq!(next_theme(Theme::Light), Theme::Dark);
-        assert_eq!(next_theme(Theme::Dark), Theme::System);
+    fn each_theme_has_a_script() {
         assert!(theme_script(Theme::System).starts_with("delete "));
         assert!(theme_script(Theme::Dark).ends_with("dataset.theme = 'dark'"));
         assert!(theme_script(Theme::Light).ends_with("dataset.theme = 'light'"));
-        assert_eq!(theme_label(Theme::System), "Theme: system");
     }
 
     #[test]
@@ -1239,6 +1382,9 @@ mod tests {
         }
         assert!(js.contains("preventDefault") && js.contains("dioxus.send"));
         assert!(js.contains("input, textarea"), "{js}");
+        // In the clue box, Ctrl+Z is the app's undo (the box redraws itself,
+        // so the browser's own undo can't follow it).
+        assert!(js.contains(".clue-field__editor"), "{js}");
     }
 
     #[test]
@@ -1312,7 +1458,7 @@ mod tests {
     }
 
     fn can(state: AppState) -> String {
-        let history = state.build.history.read();
+        let history = state.history.read();
         format!("undo={} redo={}", history.can_undo(), history.can_redo())
     }
 
@@ -1339,7 +1485,7 @@ mod tests {
     }
 
     #[test]
-    fn undo_and_redo_move_the_grid_but_never_the_clue_text() {
+    fn undo_steps_back_through_clues_and_grid_and_goes_where_they_were() {
         let undone = after(
             |mut state| {
                 state.build.cursor.set(Cursor {
@@ -1352,11 +1498,12 @@ mod tests {
                     dir: xw_engine::grid::Dir::Across,
                 });
                 state.set_clue_text("Bed".into());
+                // Undo the clue first: the grid change stays.
                 state.undo();
             },
             |state| {
                 format!(
-                    "{} {} {} cell={}",
+                    "{} [{}] {} cell={}",
                     first_row(state),
                     state.clue_text(),
                     can(state),
@@ -1364,17 +1511,66 @@ mod tests {
                 )
             },
         );
-        assert_eq!(undone, "cat Bed undo=false redo=true cell=2");
+        assert_eq!(undone, "cot [] undo=true redo=true cell=6");
+        let twice = after(
+            |state| {
+                state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
+                state.set_clue_text("Bed".into());
+                state.undo();
+                state.undo();
+            },
+            |state| {
+                format!(
+                    "{} [{}] {}",
+                    first_row(state),
+                    state.clue_text(),
+                    can(state)
+                )
+            },
+        );
+        assert_eq!(twice, "cat [] undo=false redo=true");
         let redone = after(
             |state| {
                 state.edit(|p| grid_edit::place(p, "0,0,a", "cot"));
                 state.set_clue_text("Bed".into());
                 state.undo();
+                state.undo();
+                state.redo();
                 state.redo();
             },
-            |state| format!("{} {} {}", first_row(state), state.clue_text(), can(state)),
+            |state| {
+                format!(
+                    "{} [{}] {}",
+                    first_row(state),
+                    state.clue_text(),
+                    can(state)
+                )
+            },
         );
-        assert_eq!(redone, "cot Bed undo=true redo=false");
+        assert_eq!(redone, "cot [Bed] undo=true redo=false");
+    }
+
+    #[test]
+    fn typing_a_clue_quickly_undoes_as_one_step() {
+        let said = after(
+            |state| {
+                for text in ["G", "Go", "Gol", "Gold"] {
+                    state.set_clue_text(text.into());
+                }
+                state.undo();
+            },
+            |state| format!("[{}] {}", state.clue_text(), can(state)),
+        );
+        assert_eq!(said, "[] undo=false redo=true");
+    }
+
+    #[test]
+    fn a_pick_and_the_words_it_put_in_the_clue_undo_together() {
+        let said = with_charade_text(|state| {
+            state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 0), "gold");
+            state.undo();
+        });
+        assert_eq!(said, "[] picks=0");
     }
 
     #[test]
@@ -1528,6 +1724,20 @@ mod tests {
         )
     }
 
+    /// A charade bank for the first answer; reports the clue and how many picks.
+    fn with_charade_text(act: impl FnOnce(AppState) + 'static) -> String {
+        after(
+            move |mut state| {
+                let pattern = (state.answer)().unwrap().pattern;
+                let mut charade = device(DeviceKind::Charade, 1, 1);
+                charade.options[0].columns = charade_columns();
+                state.banks.write().insert(pattern, Rc::new(vec![charade]));
+                act(state);
+            },
+            |state| format!("[{}] picks={}", state.clue_text(), state.picks.read().len()),
+        )
+    }
+
     /// Like `with_charade`, but reports the clue text.
     fn clue_after(act: impl FnOnce(AppState) + 'static) -> String {
         after(
@@ -1591,6 +1801,63 @@ mod tests {
             state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 0), "gold");
         });
         assert_eq!(note, "From the file");
+    }
+
+    #[test]
+    fn after_undo_the_explanation_still_follows_the_picks() {
+        let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
+        let note = with_charade(move |state| {
+            state.toggle_pick(key(0), "gold");
+            state.toggle_pick(key(1), "box");
+            state.undo();
+            state.toggle_pick(key(2), "band");
+        });
+        assert!(
+            note.contains("BAND") || note.to_lowercase().contains("band"),
+            "{note}"
+        );
+    }
+
+    #[test]
+    fn undoing_the_definition_switch_flips_it_back() {
+        let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
+        let text = clue_after(move |state| {
+            state.toggle_pick(key(0), "gold");
+            state.toggle_pick(key(2), "band");
+            let before = state.clue_text();
+            state.set_definition_last(true);
+            assert_ne!(state.clue_text(), before);
+            state.undo();
+            assert!(!state.settings.peek().definition_last);
+            assert_eq!(state.clue_text(), before);
+        });
+        assert!(text.starts_with("Band"), "{text}");
+    }
+
+    #[test]
+    fn going_to_the_answer_already_on_screen_keeps_its_device() {
+        let said = after(
+            |mut state| {
+                let anagram = state.selection.peek().with_device(DeviceKind::Anagram);
+                state.selection.set(anagram);
+                state.go_to("0,0,a");
+            },
+            |state| format!("{:?}", state.selection.read().device),
+        );
+        assert_eq!(said, "Some(Anagram)");
+    }
+
+    #[test]
+    fn showing_a_puzzle_stops_a_fill_and_counts_the_change() {
+        let said = after(
+            |state| {
+                let flag = state.build.stop.peek().clone();
+                state.show(puzzle(), None);
+                assert!(flag.load(std::sync::atomic::Ordering::Relaxed));
+            },
+            |state| format!("{}", state.shown_count.read()),
+        );
+        assert_eq!(said, "2");
     }
 
     #[test]
@@ -1688,5 +1955,17 @@ mod tests {
             },
         );
         assert_eq!(recovered, "Write true");
+    }
+
+    #[test]
+    fn a_square_of_the_mini_grid_goes_to_the_answer_running_the_same_way() {
+        let grid = xw_engine::grid::Grid::from_rows(&["cat", "a#o", "bye"]);
+        let lights = grid.lights();
+        // Square 2 (top right) is in 1 across and 2 down.
+        assert_eq!(light_through(&lights, 2, "2,0,a").as_deref(), Some("0,0,a"));
+        assert_eq!(light_through(&lights, 2, "0,0,d").as_deref(), Some("0,2,d"));
+        // Inside the answer on screen: stays.
+        assert_eq!(light_through(&lights, 2, "0,2,d").as_deref(), Some("0,2,d"));
+        assert_eq!(light_through(&lights, 4, "0,0,a"), None, "a block");
     }
 }

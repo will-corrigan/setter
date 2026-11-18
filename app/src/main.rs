@@ -14,7 +14,10 @@ mod grid_fill;
 mod grid_view;
 mod highlight;
 mod history;
+mod keys;
+mod library;
 mod pages;
+mod palette;
 mod shell;
 mod state;
 
@@ -54,6 +57,26 @@ fn window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
     dioxus::desktop::tao::window::Icon::from_rgba(WINDOW_ICON.to_vec(), 64, 64).ok()
 }
 
+/// The app's name in the title bar. Dev hook, debug builds only:
+/// `SETTER_DEV_TITLE=<name>` renames the window, so a test window can be told
+/// apart from the one in use.
+fn app_name() -> String {
+    std::env::var("SETTER_DEV_TITLE")
+        .ok()
+        .filter(|_| cfg!(debug_assertions))
+        .unwrap_or_else(|| "Setter".to_string())
+}
+
+/// The window's title for a puzzle: its name, then the app's.
+pub fn window_title(puzzle_title: &str, app: &str) -> String {
+    let t = puzzle_title.trim();
+    if t.is_empty() {
+        format!("Untitled — {app}")
+    } else {
+        format!("{t} — {app}")
+    }
+}
+
 fn main() {
     let (width, height) = window_size();
     let cfg = Config::new()
@@ -61,7 +84,7 @@ fn main() {
         .with_menu(None)
         .with_window(
             WindowBuilder::new()
-                .with_title("Setter")
+                .with_title(app_name())
                 .with_window_icon(window_icon())
                 .with_inner_size(LogicalSize::new(width, height)),
         );
@@ -119,6 +142,13 @@ fn App() -> Element {
             let _ = shell::write_autosave_now(state);
         }
     });
+    // The window's title names the puzzle, for the taskbar and switching.
+    use_effect(move || {
+        let title = state.puzzle.read().as_ref().map(|p| p.title.clone());
+        if let Some(title) = title {
+            dioxus::desktop::window().set_title(&window_title(&title, &app_name()));
+        }
+    });
     rsx! {
         Styles {}
         shell::Shell {}
@@ -127,6 +157,15 @@ fn App() -> Element {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_window_title_names_the_puzzle() {
+        assert_eq!(
+            super::window_title("Prize 12", "Setter"),
+            "Prize 12 — Setter"
+        );
+        assert_eq!(super::window_title("  ", "Setter"), "Untitled — Setter");
+    }
+
     #[test]
     fn the_window_icon_is_a_64px_square() {
         assert_eq!(super::WINDOW_ICON.len(), 64 * 64 * 4);

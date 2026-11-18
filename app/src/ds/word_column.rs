@@ -48,14 +48,33 @@ pub fn marked(text: &str, ranges: &[(usize, usize)]) -> Vec<(String, bool)> {
     out
 }
 
+/// How much of the row a column takes, from its longest word (not its
+/// title, which can wrap): short-word
+/// columns stay narrow, phrase columns get room. Two-column lists double.
+pub fn weight(column: &Column) -> String {
+    let longest = column
+        .groups
+        .iter()
+        .flat_map(|(_, items)| items.iter().map(|i| i.chars().count()))
+        .max()
+        .unwrap_or(0);
+    let w = (longest as f32 / 12.0).clamp(0.8, 1.8) * if column.wide { 2.0 } else { 1.0 };
+    format!("{w:.2}")
+}
+
 #[component]
 pub fn WordColumn(
     column: Column,
     selected: Option<String>,
     on_pick: EventHandler<String>,
+    /// A filter shared by every column; the column then has no box of its own.
+    #[props(default)]
+    filter: Option<String>,
 ) -> Element {
     let mut query = use_signal(String::new);
-    let groups = filter_groups(&column.groups, &query.read());
+    let shared = filter.is_some();
+    let typed = filter.unwrap_or_else(|| query.read().clone());
+    let groups = filter_groups(&column.groups, &typed);
     let total: usize = column.groups.iter().map(|(_, items)| items.len()).sum();
     let marks_for = |item: &str| -> Vec<(usize, usize)> {
         column
@@ -66,17 +85,23 @@ pub fn WordColumn(
             .unwrap_or_default()
     };
     rsx! {
-        section { class: "word-column", "data-tone": column.tone.class(), "data-wide": "{column.wide}",
+        section {
+            class: "word-column",
+            "data-tone": column.tone.class(),
+            "data-wide": "{column.wide}",
+            style: "--weight: {weight(&column)}",
             header { class: "word-column__head",
                 span { "{column.title}" }
                 span { class: "count", "{total}" }
             }
-            input {
-                class: "word-column__filter",
-                placeholder: "Filter",
-                "aria-label": "Filter {column.title}",
-                value: "{query}",
-                oninput: move |e| query.set(e.value()),
+            if !shared {
+                input {
+                    class: "word-column__filter",
+                    placeholder: "Filter",
+                    "aria-label": "Filter {column.title}",
+                    value: "{query}",
+                    oninput: move |e| query.set(e.value()),
+                }
             }
             div { class: "word-column__list", role: "listbox", "aria-label": "{column.title}",
                 if groups.is_empty() {
@@ -133,6 +158,41 @@ mod tests {
             vec![("Synonyms".to_string(), vec!["coffer".to_string()])]
         );
         assert_eq!(filter_groups(&groups(), "  "), groups());
+    }
+
+    #[test]
+    fn columns_of_phrases_get_more_room_than_columns_of_letters() {
+        let col = |items: &[&str], wide: bool| Column {
+            title: "S".into(),
+            tone: Tone::P2,
+            wide,
+            groups: vec![("g".into(), items.iter().map(|s| s.to_string()).collect())],
+            marks: vec![],
+        };
+        let short: f32 = weight(&col(&["s", "son"], false)).parse().unwrap();
+        let long: f32 = weight(&col(&["two-dimensional figure"], false))
+            .parse()
+            .unwrap();
+        let wide: f32 = weight(&col(&["s"], true)).parse().unwrap();
+        assert!(short < long, "{short} {long}");
+        assert_eq!(short, 0.8);
+        assert_eq!(wide, 1.6);
+    }
+
+    #[test]
+    fn a_shared_filter_replaces_the_column_s_own() {
+        let column = Column {
+            title: "CHEST".into(),
+            tone: Tone::P2,
+            wide: false,
+            groups: vec![("Synonyms".into(), vec!["box".into(), "coffer".into()])],
+            marks: vec![],
+        };
+        let html = render(move || {
+            rsx! { WordColumn { column: column.clone(), selected: None, on_pick: |_| {}, filter: Some("cof".to_string()) } }
+        });
+        assert!(!html.contains("word-column__filter"), "{html}");
+        assert!(html.contains("coffer") && !html.contains(">box<"), "{html}");
     }
 
     #[test]
