@@ -1,6 +1,7 @@
 //! The app shell: startup, the top bar, and whichever page the mode shows.
 
 use crate::autosave;
+use crate::bindings;
 use crate::ds::command_palette::{CommandPalette, PaletteGroup, PaletteItem};
 use crate::ds::crossword_grid::GridKey;
 use crate::ds::empty_state::EmptyState;
@@ -12,6 +13,7 @@ use crate::ds::segmented::Segmented;
 use crate::ds::top_bar::TopBar as Bar;
 use crate::export::{self, ExportFormat};
 use crate::files::{self, Theme};
+#[cfg(test)]
 use crate::keys;
 use crate::pages::about::About;
 use crate::pages::build_grid::{self, BuildGrid};
@@ -546,7 +548,7 @@ pub fn file_menu(recent: &[PathBuf], has_file: bool, busy: bool) -> Vec<(MenuIte
         (
             MenuItem::new("New puzzle…")
                 .separated()
-                .keys(keys::label("Ctrl+N"))
+                .keys(bindings::label(Shortcut::New))
                 .disabled(busy),
             FileAction::NewPuzzle,
         ),
@@ -556,13 +558,13 @@ pub fn file_menu(recent: &[PathBuf], has_file: bool, busy: bool) -> Vec<(MenuIte
         ),
         (
             MenuItem::new("Open…")
-                .keys(keys::label("Ctrl+O"))
+                .keys(bindings::label(Shortcut::Open))
                 .disabled(busy),
             FileAction::Open,
         ),
         (
             MenuItem::new("Save as…")
-                .keys(keys::label("Ctrl+Shift+S"))
+                .keys(bindings::label(Shortcut::SaveAs))
                 .separated(),
             FileAction::SaveAs,
         ),
@@ -572,7 +574,7 @@ pub fn file_menu(recent: &[PathBuf], has_file: bool, busy: bool) -> Vec<(MenuIte
         ),
         (
             MenuItem::new("Export web page…")
-                .keys(keys::label("Ctrl+E"))
+                .keys(bindings::label(Shortcut::Export))
                 .separated(),
             FileAction::Export(ExportFormat::WebPage),
         ),
@@ -626,7 +628,7 @@ pub fn settings_menu(theme: Theme) -> Vec<(MenuItem, Option<SettingsAction>)> {
         (
             MenuItem::new("Settings…")
                 .separated()
-                .keys(keys::label("Ctrl+,")),
+                .keys(bindings::label(Shortcut::Settings)),
             Some(SettingsAction::Settings),
         ),
         (MenuItem::new("About Setter"), Some(SettingsAction::About)),
@@ -878,7 +880,7 @@ fn TopBar() -> Element {
                     class: "topbar__icon",
                     r#type: "button",
                     "aria-label": "Undo",
-                    title: keys::tip("Undo", "Ctrl+Z"),
+                    title: bindings::tip("Undo", Shortcut::Undo),
                     disabled: !ready || working || !can_undo,
                     onclick: move |_| build_grid::undo(state),
                     Icon { name: IconName::Undo }
@@ -887,7 +889,7 @@ fn TopBar() -> Element {
                     class: "topbar__icon",
                     r#type: "button",
                     "aria-label": "Redo",
-                    title: keys::tip("Redo", "Ctrl+Shift+Z"),
+                    title: bindings::tip("Redo", Shortcut::Redo),
                     disabled: !ready || working || !can_redo,
                     onclick: move |_| build_grid::redo(state),
                     Icon { name: IconName::Redo }
@@ -914,14 +916,14 @@ fn TopBar() -> Element {
                 button {
                     class: "topbar__search",
                     r#type: "button",
-                    title: keys::tip("Search", "Ctrl+K"),
+                    title: bindings::tip("Search", Shortcut::Palette),
                     onclick: move |_| {
                         let mut open = state.palette_open;
                         open.set(true);
                     },
                     Icon { name: IconName::Search }
                     "Search"
-                    kbd { "{keys::label(\"Ctrl+K\")}" }
+                    kbd { "{bindings::label(Shortcut::Palette)}" }
                 }
                 MenuButton {
                     label: "Settings",

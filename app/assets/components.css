@@ -426,6 +426,11 @@ button, input, textarea { font: inherit; color: inherit; }
   border: var(--border) solid var(--line-strong); border-bottom-width: calc(var(--border) * 2); border-radius: var(--radius-xs); min-width: var(--space-6); text-align: center;
 }
 .key-chips__or { color: var(--faint); padding: 0 var(--space-1); }
+/* A shortcut's keys are a button: click to record new ones. */
+.key-edit { border: var(--border) solid transparent; background: none; border-radius: var(--radius-m); padding: var(--space-1); cursor: default; }
+.key-edit:hover, .key-edit:focus-visible { border-color: var(--line-strong); background: var(--canvas); }
+.key-record { color: var(--p1); font-weight: var(--weight-medium); border: var(--border) dashed var(--p1); border-radius: var(--radius-m); padding: var(--space-1) var(--space-2-5); }
+.settings-keys-bar { display: flex; align-items: center; gap: var(--space-3); }
 
 /* ---------- about ---------- */
 .about { flex: 1; min-height: 0; overflow-y: auto; }
@@ -463,7 +468,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .list-editor__tools { display: flex; align-items: center; gap: var(--space-2-5); padding: var(--space-2-5) var(--space-4); border-bottom: var(--border) solid var(--line); }
 .list-editor__filter { width: var(--filter-width); border: var(--border) solid var(--line-strong); border-radius: var(--radius-m); padding: var(--space-1) var(--space-2-5); font: inherit; background: var(--surface); color: var(--text); }
 .list-editor__spacer { flex: 1; }
-.list-editor__link { border: 0; background: none; color: var(--p1); font: inherit; font-weight: var(--weight-medium); cursor: default; padding: var(--space-1); }
+.list-editor__link { border: 0; background: none; color: var(--p1); font: inherit; font-weight: var(--weight-medium); cursor: default; padding: var(--space-1); white-space: nowrap; }
 .list-editor__row { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-bottom: var(--border) solid var(--line); }
 .list-editor__row:last-child { border-bottom: 0; border-radius: 0 0 var(--radius-l) var(--radius-l); }
 .list-editor__row:hover { background: var(--canvas); }

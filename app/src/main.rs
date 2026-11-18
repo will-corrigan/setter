@@ -3,6 +3,7 @@
 mod annotate;
 mod answers;
 mod autosave;
+mod bindings;
 mod clue_draft;
 mod components;
 mod ds;
@@ -133,7 +134,10 @@ fn GalleryApp() -> Element {
 fn App() -> Element {
     let state = state::use_app_state(|| {
         files::ensure_user_files();
-        files::load_settings()
+        let mut settings = files::load_settings();
+        bindings::tidy(&mut settings.shortcuts);
+        bindings::use_changes(&settings.shortcuts);
+        settings
     });
     shell::use_startup(state);
     // The last second of work is written before the window goes.

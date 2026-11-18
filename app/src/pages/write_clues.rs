@@ -1,6 +1,7 @@
 //! Write clues: the grid and devices on the left; the answer, its clue card
 //! (clue, checks, definition switch, explanation) and the word bank.
 
+use crate::bindings;
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::answer_nav::AnswerNav;
 use crate::ds::clue_field::ClueField;
@@ -15,8 +16,7 @@ use crate::ds::tiles::Tiles;
 use crate::ds::word_column::WordColumn;
 use crate::grid_view;
 use crate::highlight;
-use crate::keys;
-use crate::state::{self, AppState};
+use crate::state::{self, AppState, Shortcut};
 use dioxus::prelude::*;
 use xw_engine::bank::DeviceKind;
 
@@ -125,6 +125,8 @@ pub fn spoken(label: &str) -> String {
 #[component]
 fn Head() -> Element {
     let state = use_context::<AppState>();
+    // Shortcut labels follow the setter's keys, kept in settings.
+    let _ = state.settings.read();
     let Some(answer) = (state.answer)() else {
         return rsx! {};
     };
@@ -168,16 +170,18 @@ fn Head() -> Element {
             div { class: "clue-head__nav",
                 AnswerNav {
                     label: "{position} of {total}",
+                    previous_keys: bindings::label(Shortcut::PreviousAnswer),
+                    next_keys: bindings::label(Shortcut::NextAnswer),
                     on_step: move |delta| state.step(delta),
                 }
                 Button {
                     variant: ButtonVariant::Outline,
                     size: ButtonSize::Sm,
-                    title: keys::tip("Next answer without a clue", "Ctrl+J"),
+                    title: bindings::tip("Next answer without a clue", Shortcut::NextUnclued),
                     disabled: clued == total,
                     onclick: move |_| state.next_unclued(),
                     "Next unclued"
-                    kbd { class: "clue-head__keys", "{keys::label(\"Ctrl+J\")}" }
+                    kbd { class: "clue-head__keys", "{bindings::label(Shortcut::NextUnclued)}" }
                 }
             }
         }
@@ -449,7 +453,10 @@ mod tests {
         );
         assert!(html.contains(">1 of 4<"), "{html}");
         assert!(html.contains(">Next unclued"), "{html}");
-        assert!(html.contains(&crate::keys::label("Ctrl+J")), "{html}");
+        assert!(
+            html.contains(&bindings::label(Shortcut::NextUnclued)),
+            "{html}"
+        );
     }
 
     #[test]

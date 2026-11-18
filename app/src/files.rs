@@ -197,6 +197,9 @@ pub struct Settings {
     /// Where new puzzles are saved, if not Documents/Setter.
     #[serde(default)]
     pub puzzles_folder: Option<PathBuf>,
+    /// Keyboard shortcuts the setter changed: action → keys ("Ctrl+P").
+    #[serde(default)]
+    pub shortcuts: crate::bindings::Changes,
 }
 
 /// How many recent puzzles are remembered.

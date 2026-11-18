@@ -5,7 +5,7 @@
 use crate::answers::Answer;
 use crate::export::ExportFormat;
 use crate::files::Theme;
-use crate::keys;
+use crate::state::Shortcut;
 use std::path::PathBuf;
 use xw_engine::puzzle::Puzzle;
 
@@ -68,12 +68,12 @@ pub struct Entry {
     pub target: Target,
 }
 
-fn command(label: &str, keys_: Option<&str>, aliases: &[&str], c: Command) -> Entry {
+fn command(label: &str, keys_: Option<Shortcut>, aliases: &[&str], c: Command) -> Entry {
     Entry {
         group: Group::Commands,
         label: label.to_string(),
         detail: String::new(),
-        keys: keys_.map(keys::label),
+        keys: keys_.map(crate::bindings::label),
         aliases: aliases.iter().map(|a| a.to_string()).collect(),
         target: Target::Command(c),
     }
@@ -85,12 +85,12 @@ pub fn commands(has_puzzle: bool, has_file: bool, can_undo: bool, can_redo: bool
         command("Home", None, &["puzzles", "library"], Command::Home),
         command(
             "New puzzle…",
-            Some("Ctrl+N"),
+            Some(Shortcut::New),
             &["grid", "template"],
             Command::NewPuzzle,
         ),
         command("New filled sample", None, &[], Command::NewSample),
-        command("Open…", Some("Ctrl+O"), &["file"], Command::Open),
+        command("Open…", Some(Shortcut::Open), &["file"], Command::Open),
         command(
             "Theme: match the system",
             None,
@@ -117,7 +117,7 @@ pub fn commands(has_puzzle: bool, has_file: bool, can_undo: bool, can_redo: bool
         ),
         command(
             "Settings",
-            Some("Ctrl+,"),
+            Some(Shortcut::Settings),
             &[
                 "preferences",
                 "word lists",
@@ -135,32 +135,32 @@ pub fn commands(has_puzzle: bool, has_file: bool, can_undo: bool, can_redo: bool
             command("Write clues", None, &["page"], Command::WriteClues),
             command(
                 "Next unclued answer",
-                Some("Ctrl+J"),
+                Some(Shortcut::NextUnclued),
                 &["skip"],
                 Command::NextUnclued,
             ),
             command(
                 "Previous answer",
-                Some("Alt+←"),
+                Some(Shortcut::PreviousAnswer),
                 &["back"],
                 Command::PreviousAnswer,
             ),
             command(
                 "Next answer",
-                Some("Alt+→"),
+                Some(Shortcut::NextAnswer),
                 &["forward"],
                 Command::NextAnswer,
             ),
             command("Fill the rest", None, &["autofill"], Command::FillRest),
             command(
                 "Save as…",
-                Some("Ctrl+Shift+S"),
+                Some(Shortcut::SaveAs),
                 &["rename", "copy", "move"],
                 Command::SaveAs,
             ),
             command(
                 "Export web page…",
-                Some("Ctrl+E"),
+                Some(Shortcut::Export),
                 &["html", "share", "print"],
                 Command::Export(ExportFormat::WebPage),
             ),
@@ -187,10 +187,10 @@ pub fn commands(has_puzzle: bool, has_file: bool, can_undo: bool, can_redo: bool
         ));
     }
     if can_undo {
-        out.push(command("Undo", Some("Ctrl+Z"), &[], Command::Undo));
+        out.push(command("Undo", Some(Shortcut::Undo), &[], Command::Undo));
     }
     if can_redo {
-        out.push(command("Redo", Some("Ctrl+Shift+Z"), &[], Command::Redo));
+        out.push(command("Redo", Some(Shortcut::Redo), &[], Command::Redo));
     }
     out
 }
@@ -453,7 +453,7 @@ mod tests {
             .into_iter()
             .find(|e| e.label == "Undo")
             .and_then(|e| e.keys);
-        assert_eq!(keys_shown, Some(keys::label("Ctrl+Z")));
+        assert_eq!(keys_shown, Some(crate::keys::label("Ctrl+Z")));
     }
 
     #[test]

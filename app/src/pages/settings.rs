@@ -2,6 +2,7 @@
 //! abbreviations and indicators, and every keyboard shortcut. Opened from the
 //! gear menu or Ctrl+,; Esc or "Back" returns.
 
+use crate::bindings::{self, Combo};
 use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::list_editor::{ListEditor, ListRow};
 use crate::ds::segmented::Segmented;
@@ -10,7 +11,7 @@ use crate::ds::settings::{
 };
 use crate::files::{self, Theme};
 use crate::library;
-use crate::state::{self, AppState};
+use crate::state::{self, AppState, Shortcut};
 use crate::user_lists::{self, WordList};
 use dioxus::prelude::*;
 use std::time::SystemTime;
@@ -82,54 +83,85 @@ pub fn matching(query: &str) -> Vec<Section> {
         .collect()
 }
 
-/// Every shortcut, by where it works: (group, [(action, keys)]).
-pub const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
-    (
-        "Anywhere",
-        &[
-            ("Search commands, answers and puzzles", "Ctrl+K"),
-            ("New puzzle", "Ctrl+N"),
-            ("Open", "Ctrl+O"),
-            ("Save as", "Ctrl+Shift+S"),
-            ("Export web page", "Ctrl+E"),
-            ("Undo · Redo", "Ctrl+Z · Ctrl+Shift+Z"),
-            ("Previous · next answer", "Alt+← · Alt+→"),
-            ("Settings", "Ctrl+,"),
-        ],
-    ),
-    (
-        "Build grid",
-        &[
-            ("Type a letter", "A"),
-            ("Move between squares", "← · → · ↑ · ↓"),
-            ("Switch across and down", "Space"),
-            ("Delete a letter", "Backspace · Delete"),
-            ("Words that fit", "Ctrl+Space"),
-        ],
-    ),
-    ("Write clues", &[("Next answer without a clue", "Ctrl+J")]),
+/// Keys that work in the grid and can't be changed: (action, keys).
+pub const FIXED_KEYS: &[(&str, &str)] = &[
+    ("Type a letter", "A"),
+    ("Move between squares", "← · → · ↑ · ↓"),
+    ("Switch across and down", "Space"),
+    ("Delete a letter", "Backspace · Delete"),
 ];
 
-/// The shortcuts whose action or keys match `query`.
-pub fn shortcuts_matching(query: &str) -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+/// One row of the shortcuts list.
+#[derive(Clone, PartialEq, Debug)]
+pub enum KeyRow {
+    /// An action whose keys can be changed.
+    Action(Shortcut),
+    /// A key that works in the grid: (action, keys).
+    Fixed(&'static str, &'static str),
+}
+
+/// The shortcuts whose action or keys match `query`, by where they work.
+pub fn key_rows(query: &str) -> Vec<(&'static str, Vec<KeyRow>)> {
     let q = query.trim().to_lowercase();
-    SHORTCUTS
+    let hit = |action: &str, keys: &str| {
+        q.is_empty()
+            || action.to_lowercase().contains(&q)
+            || keys.to_lowercase().contains(&q)
+            || crate::keys::label(keys).to_lowercase().contains(&q)
+    };
+    let mut groups: Vec<(&'static str, Vec<KeyRow>)> = vec![];
+    for s in Shortcut::ALL {
+        if hit(s.name(), &bindings::keys(s)) {
+            match groups.iter_mut().find(|(g, _)| *g == s.group()) {
+                Some((_, rows)) => rows.push(KeyRow::Action(s)),
+                None => groups.push((s.group(), vec![KeyRow::Action(s)])),
+            }
+        }
+    }
+    let fixed: Vec<KeyRow> = FIXED_KEYS
         .iter()
-        .map(|(group, rows)| {
-            let rows: Vec<(&str, &str)> = rows
-                .iter()
-                .filter(|(action, keys)| {
-                    q.is_empty()
-                        || action.to_lowercase().contains(&q)
-                        || keys.to_lowercase().contains(&q)
-                        || crate::keys::label(keys).to_lowercase().contains(&q)
-                })
-                .copied()
-                .collect();
-            (*group, rows)
-        })
-        .filter(|(_, rows)| !rows.is_empty())
-        .collect()
+        .filter(|(a, k)| hit(a, k))
+        .map(|(a, k)| KeyRow::Fixed(a, k))
+        .collect();
+    if !fixed.is_empty() {
+        groups.push(("Typing in the grid", fixed));
+    }
+    groups
+}
+
+/// What happened to keys pressed for an action.
+#[derive(Clone, PartialEq, Debug)]
+pub enum Pressed {
+    /// Esc: leave it as it was.
+    Cancel,
+    /// Not usable as a shortcut; why.
+    Refused(&'static str),
+    /// Another action has them: offer to swap.
+    Clash(Combo, Shortcut),
+    /// Taken.
+    Set(Combo),
+}
+
+/// Judge keys pressed for `s`, given the changes so far.
+pub fn judge(changes: &bindings::Changes, s: Shortcut, pressed: Combo) -> Pressed {
+    if pressed.key == "escape" && !pressed.ctrl && !pressed.alt && !pressed.shift {
+        return Pressed::Cancel;
+    }
+    if let Err(why) = pressed.usable() {
+        return Pressed::Refused(why);
+    }
+    match bindings::clash(changes, s, &pressed) {
+        Some(other) => Pressed::Clash(pressed, other),
+        None => Pressed::Set(pressed),
+    }
+}
+
+/// Use and keep new shortcut changes.
+fn keep_keys(mut state: AppState, changes: bindings::Changes) {
+    bindings::use_changes(&changes);
+    state.settings.write().shortcuts = changes;
+    files::save_settings(&state.settings.peek());
+    document::eval(&state::combos_script());
 }
 
 /// "added today", "added 3 days ago"; nothing for words from before dates
@@ -502,26 +534,150 @@ fn Indicators() -> Element {
 
 #[component]
 fn Shortcuts() -> Element {
+    let state = use_context::<AppState>();
     let mut query = use_signal(String::new);
-    let groups = shortcuts_matching(&query());
+    // The action whose new keys are being recorded, and what came of it.
+    let mut recording = use_signal(|| None::<Shortcut>);
+    let mut outcome = use_signal(|| None::<(Shortcut, Pressed)>);
+    let changes = state.settings.read().shortcuts.clone();
+    let groups = key_rows(&query());
+    let mut record = move |s: Shortcut| {
+        outcome.set(None);
+        recording.set(Some(s));
+        spawn(async move {
+            let mut keys = document::eval(
+                "window.__setterCapturing = true;\
+                 const h = (e) => {\
+                   if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) return;\
+                   e.preventDefault(); e.stopPropagation();\
+                   document.removeEventListener('keydown', h, true);\
+                   window.__setterCapturing = false;\
+                   dioxus.send([e.key.toLowerCase(), e.altKey, e.ctrlKey || e.metaKey, e.shiftKey]);\
+                 };\
+                 document.addEventListener('keydown', h, true);\
+                 await new Promise(() => {});",
+            );
+            if let Ok((key, alt, ctrl, shift)) = keys.recv::<(String, bool, bool, bool)>().await {
+                recording.set(None);
+                let pressed = Combo {
+                    key,
+                    ctrl,
+                    alt,
+                    shift,
+                };
+                let mut changes = state.settings.peek().shortcuts.clone();
+                match judge(&changes, s, pressed) {
+                    Pressed::Cancel => {}
+                    Pressed::Set(c) => {
+                        bindings::set(&mut changes, s, &c);
+                        keep_keys(state, changes);
+                    }
+                    other => outcome.set(Some((s, other))),
+                }
+            }
+        });
+    };
     rsx! {
         SettingsPage { title: "Keyboard shortcuts",
-            input {
-                class: "settings-input settings-input--full",
-                r#type: "search",
-                placeholder: "Filter by action or key",
-                "aria-label": "Filter by action or key",
-                value: "{query}",
-                oninput: move |e| query.set(e.value()),
+            div { class: "settings-keys-bar",
+                input {
+                    class: "settings-input settings-input--full",
+                    r#type: "search",
+                    placeholder: "Filter by action or key",
+                    "aria-label": "Filter by action or key",
+                    value: "{query}",
+                    oninput: move |e| query.set(e.value()),
+                }
+                if !changes.is_empty() {
+                    button {
+                        class: "list-editor__link",
+                        r#type: "button",
+                        onclick: move |_| keep_keys(state, bindings::Changes::new()),
+                        "Reset all"
+                    }
+                }
             }
             if groups.is_empty() {
                 p { class: "list-editor__empty", "No matches" }
             }
             for (group , rows) in groups {
                 SettingsGroup { key: "{group}", title: group,
-                    for (action , keys) in rows {
-                        SettingsRow { key: "{action}", label: action,
-                            KeyChips { keys }
+                    for row in rows {
+                        match row {
+                            KeyRow::Fixed(action, keys) => rsx! {
+                                SettingsRow { key: "{action}", label: action, KeyChips { keys } }
+                            },
+                            KeyRow::Action(s) => {
+                                let changed = changes.contains_key(s.id());
+                                let detail = match outcome().filter(|(o, _)| *o == s) {
+                                    Some((_, Pressed::Refused(why))) => why.to_string(),
+                                    Some((_, Pressed::Clash(c, other))) => {
+                                        format!("{} is already used by {}", crate::keys::label(&c.text()), other.name())
+                                    }
+                                    _ => String::new(),
+                                };
+                                let clash = match outcome() {
+                                    Some((o, Pressed::Clash(c, _))) if o == s => Some(c),
+                                    _ => None,
+                                };
+                                rsx! {
+                                    SettingsRow { key: "{s.id()}", label: s.name(), detail,
+                                        if let Some(c) = clash {
+                                            button {
+                                                class: "list-editor__link",
+                                                r#type: "button",
+                                                onclick: move |_| {
+                                                    let mut changes = state.settings.peek().shortcuts.clone();
+                                                    bindings::swap(&mut changes, s, &c);
+                                                    keep_keys(state, changes);
+                                                    outcome.set(None);
+                                                },
+                                                "Swap"
+                                            }
+                                            button {
+                                                class: "list-editor__link",
+                                                r#type: "button",
+                                                onclick: move |_| outcome.set(None),
+                                                "Cancel"
+                                            }
+                                        } else if recording() == Some(s) {
+                                            span { class: "key-record", "Press the new keys" }
+                                            button {
+                                                class: "list-editor__link",
+                                                r#type: "button",
+                                                // The recorder takes Esc as "leave it".
+                                                onclick: move |_| {
+                                                    document::eval(
+                                                        "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))",
+                                                    );
+                                                },
+                                                "Cancel"
+                                            }
+                                        } else {
+                                            if changed {
+                                                button {
+                                                    class: "list-editor__link",
+                                                    r#type: "button",
+                                                    onclick: move |_| {
+                                                        let mut changes = state.settings.peek().shortcuts.clone();
+                                                        changes.remove(s.id());
+                                                        keep_keys(state, changes);
+                                                    },
+                                                    "Reset"
+                                                }
+                                            }
+                                            button {
+                                                class: "key-edit",
+                                                r#type: "button",
+                                                title: "Change",
+                                                "aria-label": "Change the keys for {s.name()}",
+                                                onclick: move |_| record(s),
+                                                KeyChips { keys: bindings::keys(s) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -547,46 +703,51 @@ mod tests {
 
     #[test]
     fn shortcuts_filter_by_action_or_key() {
-        let undo = shortcuts_matching("undo");
-        assert_eq!(undo.len(), 1);
-        assert_eq!(undo[0].1[0].0, "Undo · Redo");
-        let ctrl_j = shortcuts_matching("ctrl+j");
+        let undo = key_rows("undo");
+        assert_eq!(undo, [("Anywhere", vec![KeyRow::Action(Shortcut::Undo)])]);
+        let ctrl_j = key_rows("ctrl+j");
         assert_eq!(
             ctrl_j,
-            [(
-                "Write clues",
-                vec![("Next answer without a clue", "Ctrl+J")]
-            )]
+            [("Write clues", vec![KeyRow::Action(Shortcut::NextUnclued)])]
         );
-        assert_eq!(shortcuts_matching("").len(), SHORTCUTS.len());
+        let all = key_rows("");
+        let actions = all
+            .iter()
+            .flat_map(|(_, r)| r)
+            .filter(|r| matches!(r, KeyRow::Action(_)))
+            .count();
+        assert_eq!(actions, Shortcut::ALL.len(), "every action can be changed");
+        assert_eq!(all.last().unwrap().0, "Typing in the grid");
     }
 
     #[test]
-    fn every_real_shortcut_is_listed() {
-        let listed: Vec<&str> = SHORTCUTS
-            .iter()
-            .flat_map(|(_, rows)| rows.iter().map(|(_, k)| *k))
-            .collect();
-        let all = listed.join(" · ").to_lowercase();
-        for (key, alt, ctrl, shift, _) in state::SHORTCUTS {
-            let mut combo = String::new();
-            if ctrl {
-                combo.push_str("ctrl+");
-            }
-            if shift {
-                combo.push_str("shift+");
-            }
-            if alt {
-                combo.push_str("alt+");
-            }
-            combo.push_str(match key {
-                " " => "space",
-                "arrowleft" => "←",
-                "arrowright" => "→",
-                k => k,
-            });
-            assert!(all.contains(&combo), "{combo} isn't listed");
-        }
+    fn pressed_keys_are_judged() {
+        let ch = bindings::Changes::new();
+        let k = |t: &str| Combo::parse(t).unwrap();
+        let esc = Combo {
+            key: "escape".into(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+        };
+        assert_eq!(judge(&ch, Shortcut::Palette, esc), Pressed::Cancel);
+        assert!(matches!(
+            judge(&ch, Shortcut::Palette, k("P")),
+            Pressed::Refused(_)
+        ));
+        assert_eq!(
+            judge(&ch, Shortcut::Palette, k("Ctrl+N")),
+            Pressed::Clash(k("Ctrl+N"), Shortcut::New)
+        );
+        assert_eq!(
+            judge(&ch, Shortcut::Palette, k("Ctrl+P")),
+            Pressed::Set(k("Ctrl+P"))
+        );
+        assert_eq!(
+            judge(&ch, Shortcut::Palette, k("Ctrl+K")),
+            Pressed::Set(k("Ctrl+K")),
+            "its own keys are fine"
+        );
     }
 
     #[test]

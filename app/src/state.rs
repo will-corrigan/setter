@@ -368,53 +368,44 @@ impl Shortcut {
     }
 }
 
-/// (key, Alt held, Ctrl held, Shift held, action). The page's key listener
-/// and `shortcut` both read this table.
-pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 13] = [
-    ("arrowleft", true, false, false, Shortcut::PreviousAnswer),
-    ("arrowright", true, false, false, Shortcut::NextAnswer),
-    ("s", false, true, false, Shortcut::Save),
-    ("s", false, true, true, Shortcut::SaveAs),
-    ("n", false, true, false, Shortcut::New),
-    ("o", false, true, false, Shortcut::Open),
-    ("e", false, true, false, Shortcut::Export),
-    ("k", false, true, false, Shortcut::Palette),
-    (",", false, true, false, Shortcut::Settings),
-    ("j", false, true, false, Shortcut::NextUnclued),
-    ("z", false, true, false, Shortcut::Undo),
-    ("z", false, true, true, Shortcut::Redo),
-    (" ", false, true, false, Shortcut::Words),
-];
-
+/// The action a key runs, if any, with the setter's bindings.
 pub fn shortcut(key: &str, alt: bool, ctrl: bool, shift: bool) -> Option<Shortcut> {
-    let key = key.to_lowercase();
-    SHORTCUTS
-        .iter()
-        .find(|(k, a, c, s, _)| *k == key && *a == alt && *c == ctrl && *s == shift)
-        .map(|s| s.4)
+    crate::bindings::action_for(&crate::bindings::Combo {
+        key: key.to_lowercase(),
+        ctrl,
+        alt,
+        shift,
+    })
+}
+
+/// JavaScript that sets the table of shortcut keys the listener answers to
+/// (run again whenever the setter changes them).
+pub fn combos_script() -> String {
+    format!(
+        "window.__setterCombos = {};",
+        crate::bindings::script_table()
+    )
 }
 
 /// JavaScript that listens for the shortcut keys anywhere in the window,
 /// stops the webview's own handling of them, and sends
 /// `[key, alt, ctrl, shift]`. Each combo ends with whether it also works
-/// while typing in a text box.
+/// while typing in a text box. While Settings is recording new keys
+/// (`window.__setterCapturing`), it stands aside.
 pub fn shortcut_script() -> String {
-    let combos: Vec<String> = SHORTCUTS
-        .iter()
-        .map(|(k, a, c, s, action)| format!("[\"{k}\",{a},{c},{s},{}]", action.while_typing()))
-        .collect();
     format!(
-        "const combos = [{}];\
+        "{}\
          document.addEventListener('keydown', (e) => {{\
+           if (window.__setterCapturing) return;\
            const key = e.key.toLowerCase(), alt = e.altKey, ctrl = e.ctrlKey || e.metaKey, shift = e.shiftKey;\
            const typing = !!(e.target.closest && e.target.closest('input, textarea, [contenteditable=true]')) && !(e.target.closest && e.target.closest('.clue-field__editor'));\
-           if (combos.some(([k, a, c, s, t]) => k === key && a === alt && c === ctrl && s === shift && (t || !typing))) {{\
+           if ((window.__setterCombos || []).some(([k, a, c, s, t]) => k === key && a === alt && c === ctrl && s === shift && (t || !typing))) {{\
              e.preventDefault();\
              dioxus.send([key, alt, ctrl, shift]);\
            }}\
          }});\
          await new Promise(() => {{}});",
-        combos.join(",")
+        combos_script()
     )
 }
 
@@ -1400,15 +1391,24 @@ mod tests {
     #[test]
     fn shortcut_script_listens_for_every_shortcut() {
         let js = shortcut_script();
-        for (key, alt, ctrl, shift, action) in SHORTCUTS {
+        for action in Shortcut::ALL {
+            let c = crate::bindings::combo(action);
             let typing = action.while_typing();
+            let key = serde_json::to_string(&c.key).unwrap();
             assert!(
-                js.contains(&format!("[\"{key}\",{alt},{ctrl},{shift},{typing}]")),
+                js.contains(&format!(
+                    "[{key},{},{},{},{typing}]",
+                    c.alt, c.ctrl, c.shift
+                )),
                 "{js}"
             );
         }
         assert!(js.contains("preventDefault") && js.contains("dioxus.send"));
         assert!(js.contains("input, textarea"), "{js}");
+        assert!(
+            js.contains("__setterCapturing"),
+            "stands aside while recording keys"
+        );
         // In the clue box, Ctrl+Z is the app's undo (the box redraws itself,
         // so the browser's own undo can't follow it).
         assert!(js.contains(".clue-field__editor"), "{js}");
