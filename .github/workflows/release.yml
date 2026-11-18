@@ -200,14 +200,9 @@ jobs:
           echo "MAIN_EXE=$main" >> "$GITHUB_ENV"
           echo "$app"; ls -R "$app/Contents" | head -50
       # dx build names icon.icns in Info.plist but leaves the file out (only
-      # dx bundle copies it), so the app would show a blank icon. Adding a file
-      # breaks the app's ad-hoc signature, which macOS then calls "damaged",
-      # so it's signed again (ad hoc: no Apple certificate yet).
+      # dx bundle copies it), so the app would show a blank icon.
       - name: Put the icon in the app
-        run: |
-          cp app/icons/icon.icns "$APP/Contents/Resources/icon.icns"
-          codesign --force --deep --sign - "$APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
+        run: cp app/icons/icon.icns "$APP/Contents/Resources/icon.icns"
       # vpk is a .NET 10 tool; the runners' own .NET isn't always found.
       - uses: actions/setup-dotnet@v5
         with:
@@ -231,7 +226,10 @@ jobs:
         run: |
           mkdir -p dmg
           ditto -x -k Releases/Setter-osx-Portable.zip dmg
-          # What people get must pass macOS's signature check, or it's "damaged".
+          # Adding the icon, and vpk adding its update files, break the app's
+          # ad-hoc signature, which macOS calls "damaged". Sign it last (ad hoc:
+          # no Apple certificate yet), and check it.
+          codesign --force --deep --sign - dmg/Setter.app
           codesign --verify --deep --strict --verbose=2 dmg/Setter.app
           pipx run --spec dmgbuild==2.0.0 dmgbuild -s scripts/dmg-settings.py -D app=dmg/Setter.app Setter Releases/Setter.dmg
       - name: Keep it with the run
