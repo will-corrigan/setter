@@ -1,5 +1,6 @@
-//! Updates, for Setter installed from a release (Velopack). At start-up, and
-//! from "Check for updates…", it looks for a newer release on GitHub. By
+//! Updates, for Setter installed from a release (Velopack). At start-up, every
+//! few hours while it's open, and from "Check for updates…", it looks for a
+//! newer release on GitHub. By
 //! default it then asks: nothing is downloaded until the setter chooses
 //! Update, and then Setter restarts into the new version. With "Install
 //! updates automatically" on, it downloads quietly, offers "Restart to

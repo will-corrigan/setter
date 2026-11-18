@@ -6,8 +6,7 @@ use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::prose::Prose;
 use crate::files;
 use crate::shell;
-use crate::state::{AppState, Update};
-use crate::updater;
+use crate::state::{update_line, AppState, UpdateAction};
 use dioxus::prelude::*;
 use std::collections::HashSet;
 
@@ -102,6 +101,53 @@ pub fn credits() -> Vec<(&'static str, Vec<Credit>)> {
     out
 }
 
+/// Where updating has got to, and the one thing to do about it: Check now,
+/// Update, or Restart to update. On About and in Settings → General.
+#[component]
+pub fn UpdateStatus() -> Element {
+    let state = use_context::<AppState>();
+    let (line, action) = update_line(
+        &(state.update)(),
+        (state.update_checking)(),
+        (state.update_checked)(),
+        std::time::SystemTime::now(),
+    );
+    rsx! {
+        span { class: "update-status",
+            span { class: "update-status__line", "{line}" }
+            match action {
+                UpdateAction::Check => rsx! {
+                    Button {
+                        variant: ButtonVariant::Outline,
+                        size: ButtonSize::Sm,
+                        onclick: move |_| shell::check_for_updates(state, true),
+                        "Check now"
+                    }
+                },
+                UpdateAction::Wait => rsx! {
+                    Button { variant: ButtonVariant::Outline, size: ButtonSize::Sm, disabled: true, "Check now" }
+                },
+                UpdateAction::Update(next) => rsx! {
+                    Button {
+                        variant: ButtonVariant::Primary,
+                        size: ButtonSize::Sm,
+                        onclick: move |_| shell::download_update(state, next.clone(), true),
+                        "Update"
+                    }
+                },
+                UpdateAction::Restart => rsx! {
+                    Button {
+                        variant: ButtonVariant::Primary,
+                        size: ButtonSize::Sm,
+                        onclick: move |_| shell::restart_to_update(state),
+                        "Restart to update"
+                    }
+                },
+            }
+        }
+    }
+}
+
 const REPO: &str = "https://github.com/will-corrigan/setter";
 
 #[component]
@@ -132,39 +178,7 @@ pub fn About() -> Element {
                         h1 { "Setter" }
                         div { class: "about__meta",
                             "Version {version}"
-                            match (state.update)() {
-                                Update::Ready(next) => rsx! {
-                                    button {
-                                        class: "topbar__update",
-                                        r#type: "button",
-                                        title: updater::ready_tip(&next),
-                                        onclick: move |_| shell::restart_to_update(state),
-                                        "Restart to update"
-                                    }
-                                },
-                                Update::Available(next) => rsx! {
-                                    button {
-                                        class: "topbar__update",
-                                        r#type: "button",
-                                        onclick: move |_| shell::download_update(state, next.clone(), true),
-                                        "Update to {next}"
-                                    }
-                                },
-                                Update::Downloading(next) => rsx! {
-                                    span { class: "about__current", "Downloading {next}…" }
-                                },
-                                Update::UpToDate => rsx! {
-                                    span { class: "about__current", "✓ Up to date" }
-                                },
-                                Update::Unknown => rsx! {
-                                    button {
-                                        class: "list-editor__link",
-                                        r#type: "button",
-                                        onclick: move |_| shell::check_for_updates(state, true),
-                                        "Check for updates"
-                                    }
-                                },
-                            }
+                            UpdateStatus {}
                         }
                     }
                     div { class: "about__links",

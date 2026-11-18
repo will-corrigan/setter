@@ -357,6 +357,51 @@ pub enum Update {
     Ready(String),
 }
 
+/// What to say about updates, and what can be done: the line under the
+/// version in About and Settings.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum UpdateAction {
+    Check,
+    Update(String),
+    Restart,
+    Wait,
+}
+
+pub fn update_line(
+    update: &Update,
+    checking: bool,
+    checked: Option<std::time::SystemTime>,
+    now: std::time::SystemTime,
+) -> (String, UpdateAction) {
+    let when = checked.map(|t| crate::library::ago(t, now));
+    match update {
+        Update::Ready(v) => (
+            format!("Setter {v} is ready to install"),
+            UpdateAction::Restart,
+        ),
+        Update::Downloading(v) => (format!("Downloading Setter {v}…"), UpdateAction::Wait),
+        Update::Available(v) => (
+            format!("Setter {v} is available"),
+            UpdateAction::Update(v.clone()),
+        ),
+        _ if checking => ("Checking for updates…".into(), UpdateAction::Wait),
+        Update::UpToDate => (
+            match when {
+                Some(w) => format!("Up to date · checked {w}"),
+                None => "Up to date".into(),
+            },
+            UpdateAction::Check,
+        ),
+        Update::Unknown => (
+            match when {
+                Some(w) => format!("Couldn't check for updates · tried {w}"),
+                None => "Not checked yet".into(),
+            },
+            UpdateAction::Check,
+        ),
+    }
+}
+
 // ---------- keyboard shortcuts ----------
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -556,6 +601,10 @@ pub struct AppState {
     /// "Later" was chosen for the update on offer: don't show it again until
     /// the next launch or check.
     pub update_later: Signal<bool>,
+    /// A check for updates is running.
+    pub update_checking: Signal<bool>,
+    /// When the last check for updates finished.
+    pub update_checked: Signal<Option<std::time::SystemTime>>,
     /// How many puzzles have been shown: work started for one puzzle checks
     /// it is still on screen before it lands.
     pub shown_count: Signal<u64>,
@@ -651,6 +700,8 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         settings_page: use_signal(|| None),
         update: use_signal(|| Update::Unknown),
         update_later: use_signal(|| false),
+        update_checking: use_signal(|| false),
+        update_checked: use_signal(|| None),
         shown_count: use_signal(|| 0),
         ready,
         answer,
@@ -2043,6 +2094,39 @@ mod tests {
         assert_eq!(
             reads_as_picked(base, &columns, &picks, key),
             "letters of “be gin”, mixed"
+        );
+    }
+
+    #[test]
+    fn the_update_line_says_where_updating_has_got_to() {
+        use std::time::{Duration, UNIX_EPOCH};
+        let now = UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let five = Some(now - Duration::from_secs(5 * 60));
+        assert_eq!(
+            update_line(&Update::UpToDate, false, five, now),
+            (
+                "Up to date · checked 5 minutes ago".into(),
+                UpdateAction::Check
+            )
+        );
+        assert_eq!(
+            update_line(&Update::UpToDate, true, five, now).1,
+            UpdateAction::Wait
+        );
+        assert_eq!(
+            update_line(&Update::Available("0.2.0".into()), false, five, now),
+            (
+                "Setter 0.2.0 is available".into(),
+                UpdateAction::Update("0.2.0".into())
+            )
+        );
+        assert_eq!(
+            update_line(&Update::Ready("0.2.0".into()), false, None, now).1,
+            UpdateAction::Restart
+        );
+        assert_eq!(
+            update_line(&Update::Unknown, false, None, now).0,
+            "Not checked yet"
         );
     }
 }

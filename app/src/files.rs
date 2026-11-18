@@ -196,6 +196,10 @@ pub struct Settings {
     /// Download and install updates without asking (off: ask first).
     #[serde(default)]
     pub auto_update: bool,
+    /// Look for updates only when asked (off: at start-up and every few
+    /// hours too).
+    #[serde(default)]
+    pub manual_update_checks: bool,
     /// Puzzles opened or saved lately, most recent first.
     #[serde(default)]
     pub recent: Vec<PathBuf>,

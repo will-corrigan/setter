@@ -69,9 +69,26 @@ pub fn warning_line(warnings: &[String]) -> Option<String> {
 /// fresh sample if there isn't one.
 pub fn use_startup(state: AppState) {
     use_hook(|| {
-        // Look for a newer release: offered, not installed (unless the
-        // setter has updates install automatically).
-        check_for_updates(state, false);
+        // Look for a newer release now and every few hours while Setter is
+        // open: offered, not installed (unless the setter has updates install
+        // automatically).
+        if !state.settings.peek().manual_update_checks {
+            check_for_updates(state, false);
+        }
+        spawn(async move {
+            let mut last = std::time::SystemTime::now();
+            loop {
+                // Wall-clock time, so a laptop that slept still checks when
+                // it wakes.
+                tokio::time::sleep(UPDATE_LOOK).await;
+                if !state.settings.peek().manual_update_checks
+                    && update_check_due(last, std::time::SystemTime::now(), &state.update.peek())
+                {
+                    last = std::time::SystemTime::now();
+                    check_for_updates(state, false);
+                }
+            }
+        });
         spawn(async move {
             let warnings = tokio::task::spawn_blocking(|| state::engine().warnings.clone());
             spawn(async move {
@@ -226,21 +243,52 @@ pub fn save_or_keep(state: AppState) -> Result<(), String> {
     })
 }
 
+/// How often to look at the clock, and how long between checks for updates.
+const UPDATE_LOOK: Duration = Duration::from_secs(30 * 60);
+const UPDATE_EVERY: Duration = Duration::from_secs(4 * 60 * 60);
+
+/// Time for another quiet check? Not while an update is on its way or ready.
+fn update_check_due(
+    last: std::time::SystemTime,
+    now: std::time::SystemTime,
+    update: &state::Update,
+) -> bool {
+    let waited = now.duration_since(last).unwrap_or_default() >= UPDATE_EVERY;
+    waited
+        && !matches!(
+            update,
+            state::Update::Downloading(_) | state::Update::Ready(_)
+        )
+}
+
 /// Look for a newer release. On start-up (`by_hand` false) it's quiet unless
 /// there is one; from "Check for updates…" it says what it found.
 pub fn check_for_updates(state: AppState, by_hand: bool) {
+    if *state.update_checking.peek() {
+        return;
+    }
+    let mut checking = state.update_checking;
+    checking.set(true);
     spawn(async move {
         let found = tokio::task::spawn_blocking(updater::check)
             .await
             .unwrap_or(updater::Found::Unavailable);
+        checking.set(false);
+        let mut checked = state.update_checked;
+        checked.set(Some(std::time::SystemTime::now()));
         let (mut update, mut later, mut notice) = (state.update, state.update_later, state.notice);
         match found {
             updater::Found::Newer(version) => {
                 if state.settings.peek().auto_update && !by_hand {
                     download_update(state, version, false);
                 } else {
+                    // "Later" holds for that version; a newer one (or asking
+                    // by hand) shows the offer again.
+                    let same = *update.peek() == state::Update::Available(version.clone());
                     update.set(state::Update::Available(version));
-                    later.set(false);
+                    if by_hand || !same {
+                        later.set(false);
+                    }
                 }
             }
             updater::Found::Current => {
@@ -1146,6 +1194,32 @@ mod tests {
             ready.contains(r#"title="Setter 0.2.0 is ready""#),
             "{ready}"
         );
+    }
+
+    #[test]
+    fn updates_are_looked_for_every_few_hours_unless_one_is_on_its_way() {
+        let start = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let soon = start + Duration::from_secs(60 * 60);
+        let later = start + UPDATE_EVERY;
+        assert!(!update_check_due(start, soon, &state::Update::UpToDate));
+        assert!(update_check_due(start, later, &state::Update::UpToDate));
+        assert!(update_check_due(
+            start,
+            later,
+            &state::Update::Available("0.2.0".into())
+        ));
+        assert!(!update_check_due(
+            start,
+            later,
+            &state::Update::Ready("0.2.0".into())
+        ));
+        assert!(!update_check_due(
+            start,
+            later,
+            &state::Update::Downloading("0.2.0".into())
+        ));
+        // A clock that went backwards doesn't count as time passing.
+        assert!(!update_check_due(later, start, &state::Update::Unknown));
     }
 
     #[test]
