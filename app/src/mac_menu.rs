@@ -19,6 +19,7 @@ pub enum Pick {
     NewSample,
     Home,
     About,
+    CheckUpdates,
 }
 
 const PREFIX: &str = "setter:";
@@ -32,6 +33,7 @@ fn id_of(pick: Pick) -> String {
         Pick::NewSample => "new-sample",
         Pick::Home => "home",
         Pick::About => "about",
+        Pick::CheckUpdates => "check-updates",
     };
     format!("{PREFIX}{name}")
 }
@@ -45,6 +47,7 @@ pub fn pick_for(id: &MenuId) -> Option<Pick> {
         "new-sample" => Pick::NewSample,
         "home" => Pick::Home,
         "about" => Pick::About,
+        "check-updates" => Pick::CheckUpdates,
         other => Pick::Shortcut(Shortcut::ALL.into_iter().find(|s| s.id() == other)?),
     })
 }
@@ -129,6 +132,7 @@ pub fn menu_bar() -> Menu {
     let app = SubmenuBuilder::new()
         .text("Setter")
         .item(&item("About Setter", Pick::About))
+        .item(&item("Check for Updates…", Pick::CheckUpdates))
         .item(&sep())
         .item(&shortcut("Settings…", Shortcut::Settings))
         .item(&sep())
@@ -227,6 +231,7 @@ mod tests {
             Pick::NewSample,
             Pick::Home,
             Pick::About,
+            Pick::CheckUpdates,
         ]);
         for p in picks {
             assert_eq!(pick_for(&MenuId::new(id_of(p))), Some(p), "{p:?}");

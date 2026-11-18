@@ -61,7 +61,7 @@ impl Section {
     /// Words that find the section from "Find a setting".
     fn words(self) -> &'static str {
         match self {
-            Section::General => "general setter name author theme dark light system appearance definition start end puzzles folder documents save",
+            Section::General => "general setter name author theme dark light system appearance definition start end puzzles folder documents save updates update automatically version",
             Section::WordLists => "word lists words phrases own dictionary never suggest banned block import export",
             Section::Definitions => "definitions definition meaning means answer phrase synonym own thesaurus",
             Section::Abbreviations => "abbreviations letters stand for meanings",
@@ -339,6 +339,19 @@ fn General() -> Element {
                         selected: usize::from(s.definition_last),
                         on_change: move |i: usize| {
                             state.settings.write().definition_last = i == 1;
+                            save();
+                        },
+                    }
+                }
+            }
+            SettingsGroup { title: "Updates",
+                SettingsRow { label: "New versions",
+                    Segmented {
+                        label: "New versions",
+                        options: vec!["Ask first".to_string(), "Install automatically".to_string()],
+                        selected: usize::from(s.auto_update),
+                        on_change: move |i: usize| {
+                            state.settings.write().auto_update = i == 1;
                             save();
                         },
                     }

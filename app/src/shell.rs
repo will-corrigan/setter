@@ -8,7 +8,7 @@ use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
 use crate::ds::inline_edit::InlineEdit;
 use crate::ds::menu_button::{MenuButton, MenuItem};
-use crate::ds::notice::Notice;
+use crate::ds::notice::{Notice, UpdateBanner};
 use crate::ds::segmented::Segmented;
 use crate::ds::top_bar::TopBar as Bar;
 use crate::export::{self, ExportFormat};
@@ -69,22 +69,9 @@ pub fn warning_line(warnings: &[String]) -> Option<String> {
 /// fresh sample if there isn't one.
 pub fn use_startup(state: AppState) {
     use_hook(|| {
-        // A newer release downloads quietly; the top bar offers it when ready.
-        spawn(async move {
-            let found =
-                tokio::task::spawn_blocking(|| (updater::fetch(), updater::installed())).await;
-            match found {
-                Ok((Some(version), _)) => {
-                    let mut ready = state.update_ready;
-                    ready.set(Some(version));
-                }
-                Ok((None, true)) => {
-                    let mut current = state.up_to_date;
-                    current.set(true);
-                }
-                _ => {}
-            }
-        });
+        // Look for a newer release: offered, not installed (unless the
+        // setter has updates install automatically).
+        check_for_updates(state, false);
         spawn(async move {
             let warnings = tokio::task::spawn_blocking(|| state::engine().warnings.clone());
             spawn(async move {
@@ -235,6 +222,103 @@ pub fn save_or_keep(state: AppState) -> Result<(), String> {
         }
         format!("{e}. Use Save as to keep it somewhere else.")
     })
+}
+
+/// Look for a newer release. On start-up (`by_hand` false) it's quiet unless
+/// there is one; from "Check for updates…" it says what it found.
+pub fn check_for_updates(state: AppState, by_hand: bool) {
+    spawn(async move {
+        let found = tokio::task::spawn_blocking(updater::check)
+            .await
+            .unwrap_or(updater::Found::Unavailable);
+        let (mut update, mut later, mut notice) = (state.update, state.update_later, state.notice);
+        match found {
+            updater::Found::Newer(version) => {
+                if state.settings.peek().auto_update && !by_hand {
+                    download_update(state, version, false);
+                } else {
+                    update.set(state::Update::Available(version));
+                    later.set(false);
+                }
+            }
+            updater::Found::Current => {
+                update.set(state::Update::UpToDate);
+                if by_hand {
+                    notice.set(Some(format!(
+                        "Setter {} is the latest version.",
+                        env!("CARGO_PKG_VERSION")
+                    )));
+                }
+            }
+            updater::Found::Unavailable => {
+                if by_hand {
+                    notice.set(Some(
+                        "Couldn't check for updates: this copy wasn't installed from a release, or GitHub can't be reached."
+                            .into(),
+                    ));
+                }
+            }
+        }
+    });
+}
+
+/// Download the update on offer; then restart into it if `restart` (the
+/// setter chose Update), or offer "Restart to update" (automatic updates).
+pub fn download_update(state: AppState, version: String, restart: bool) {
+    let mut update = state.update;
+    update.set(state::Update::Downloading(version.clone()));
+    spawn(async move {
+        let done = tokio::task::spawn_blocking(updater::download)
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+        match done {
+            Ok(ready) => {
+                update.set(state::Update::Ready(ready));
+                if restart {
+                    restart_to_update(state);
+                }
+            }
+            Err(e) => {
+                update.set(state::Update::Available(version));
+                let mut notice = state.notice;
+                notice.set(Some(e));
+            }
+        }
+    });
+}
+
+/// A newer version is out: say so under the top bar, and ask. Nothing is
+/// downloaded until Update is chosen.
+#[component]
+fn UpdateOffer() -> Element {
+    let state = use_context::<AppState>();
+    let open = move |url: String| {
+        let mut notice = state.notice;
+        if let Err(e) = files::open_url(&url) {
+            notice.set(Some(format!("Couldn't open the browser: {e}")));
+        }
+    };
+    match (state.update)() {
+        state::Update::Available(version) if !(state.update_later)() => {
+            let notes = updater::notes_url(&version);
+            let to_get = version.clone();
+            rsx! {
+                UpdateBanner {
+                    message: format!("Setter {version} is available."),
+                    on_notes: move |_| open(notes.clone()),
+                    on_update: move |_| download_update(state, to_get.clone(), true),
+                    on_later: move |_| {
+                        let mut later = state.update_later;
+                        later.set(true);
+                    },
+                }
+            }
+        }
+        state::Update::Downloading(version) => rsx! {
+            UpdateBanner { message: format!("Downloading Setter {version}… Setter restarts when it's ready.") }
+        },
+        _ => rsx! {},
+    }
 }
 
 /// Save, then install the downloaded update and start the new version.
@@ -491,6 +575,7 @@ pub fn run_menu_pick(mut state: AppState, pick: crate::mac_menu::Pick) {
         Pick::Export(format) => run_file_action(state, FileAction::Export(format)),
         Pick::NewSample => run_file_action(state, FileAction::NewSample),
         Pick::Home => run_file_action(state, FileAction::Home),
+        Pick::CheckUpdates => check_for_updates(state, true),
         Pick::About => {
             state.settings_page.set(None);
             state.credits.set(true);
@@ -551,6 +636,7 @@ pub fn Shell() -> Element {
             if let Some(message) = (state.notice)() {
                 Notice { message, on_dismiss: move |_| state.notice.set(None) }
             }
+            UpdateOffer {}
             if (state.credits)() {
                 About {}
             } else if let Some(section) = (state.settings_page)() {
@@ -669,6 +755,7 @@ const RECENT_SHOWN: usize = 5;
 pub enum SettingsAction {
     Theme(Theme),
     Settings,
+    CheckUpdates,
     About,
 }
 
@@ -690,6 +777,10 @@ pub fn settings_menu(theme: Theme) -> Vec<(MenuItem, Option<SettingsAction>)> {
                 .separated()
                 .keys(bindings::label(Shortcut::Settings)),
             Some(SettingsAction::Settings),
+        ),
+        (
+            MenuItem::new("Check for updates…"),
+            Some(SettingsAction::CheckUpdates),
         ),
         (MenuItem::new("About Setter"), Some(SettingsAction::About)),
     ]
@@ -725,6 +816,7 @@ fn run_settings_action(mut state: AppState, action: SettingsAction) {
             files::save_settings(&state.settings.peek());
         }
         SettingsAction::Settings => open_settings(state),
+        SettingsAction::CheckUpdates => check_for_updates(state, true),
         SettingsAction::About => {
             state.settings_page.set(None);
             state.credits.set(true);
@@ -964,7 +1056,7 @@ fn TopBar() -> Element {
                     },
                 }
                 }
-                if let Some(version) = (state.update_ready)() {
+                if let state::Update::Ready(version) = (state.update)() {
                     button {
                         class: "topbar__update",
                         r#type: "button",
@@ -1045,13 +1137,44 @@ mod tests {
         assert!(!none.contains("topbar__update"), "{none}");
         let ready = shell(|mut state| {
             state.show(puzzle(), None);
-            state.update_ready.set(Some("0.2.0".into()));
+            state.update.set(state::Update::Ready("0.2.0".into()));
         });
         assert!(ready.contains(">Restart to update<"), "{ready}");
         assert!(
             ready.contains(r#"title="Setter 0.2.0 is ready""#),
             "{ready}"
         );
+    }
+
+    #[test]
+    fn a_new_version_is_offered_before_anything_downloads() {
+        let offered = shell(|mut state| {
+            state.show(puzzle(), None);
+            state.update.set(state::Update::Available("0.2.0".into()));
+        });
+        assert!(offered.contains("Setter 0.2.0 is available."), "{offered}");
+        assert!(
+            offered.contains(">Update<")
+                && offered.contains(">Later<")
+                && offered.contains("s new<"),
+            "{offered}"
+        );
+        assert!(!offered.contains("topbar__update"), "{offered}");
+        let later = shell(|mut state| {
+            state.show(puzzle(), None);
+            state.update.set(state::Update::Available("0.2.0".into()));
+            state.update_later.set(true);
+        });
+        assert!(!later.contains("is available"), "{later}");
+        let downloading = shell(|mut state| {
+            state.show(puzzle(), None);
+            state.update.set(state::Update::Downloading("0.2.0".into()));
+        });
+        assert!(
+            downloading.contains("Downloading Setter 0.2.0"),
+            "{downloading}"
+        );
+        assert!(!downloading.contains(">Update<"), "{downloading}");
     }
 
     #[test]

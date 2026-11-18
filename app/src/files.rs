@@ -193,6 +193,9 @@ pub struct Settings {
     /// Picked definitions go at the end of the clue, not the start.
     #[serde(default)]
     pub definition_last: bool,
+    /// Download and install updates without asking (off: ask first).
+    #[serde(default)]
+    pub auto_update: bool,
     /// Puzzles opened or saved lately, most recent first.
     #[serde(default)]
     pub recent: Vec<PathBuf>,
