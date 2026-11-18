@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/will-corrigan/setter/compare/v0.1.3...v0.1.4) - 2026-11-18
+
+### Added
+
+- *(app)* ask before updating, and Check for updates ([#16](https://github.com/will-corrigan/setter/pull/16))
+
+### Fixed
+
+- Mac menus work, the Mode switch keeps its style, and Build grid squares fill the window ([#18](https://github.com/will-corrigan/setter/pull/18))
+
 ## [0.1.3](https://github.com/will-corrigan/setter/compare/v0.1.2...v0.1.3) - 2026-11-18
 
 ### Added
