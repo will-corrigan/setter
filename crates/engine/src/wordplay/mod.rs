@@ -23,6 +23,10 @@ use serde::Serialize;
 pub struct Ctx<'a> {
     pub lex: &'a Lexicon,
     pub abbr: &'a Abbreviations,
+    /// How good each word is (the fill ratings). When given, made-up phrases
+    /// such as two-word anagram splits use no Rare word: slurs and junk
+    /// fragments are rated Rare.
+    pub quality: Option<&'a crate::quality::Qualities>,
 }
 
 /// A word from the lexicon, as shown to the user.
@@ -64,7 +68,28 @@ const REVERSED_RANK_LIMIT: WordId = 60_000;
 
 impl<'a> Ctx<'a> {
     pub fn new(lex: &'a Lexicon, abbr: &'a Abbreviations) -> Self {
-        Ctx { lex, abbr }
+        Ctx {
+            lex,
+            abbr,
+            quality: None,
+        }
+    }
+
+    pub fn with_quality(self, quality: &'a crate::quality::Qualities) -> Self {
+        Ctx {
+            quality: Some(quality),
+            ..self
+        }
+    }
+
+    /// Fit to put in a made-up phrase? Not Rare (when ratings are known).
+    pub fn decent(&self, word: &WordRef) -> bool {
+        let Some(q) = self.quality else {
+            return true;
+        };
+        self.lex
+            .lookup(&word.key)
+            .is_none_or(|id| q.of(id) != crate::quality::Quality::Rare)
     }
 
     pub fn word_ref(&self, id: WordId) -> WordRef {

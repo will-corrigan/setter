@@ -480,6 +480,41 @@ mod tests {
         assert_eq!(cols.iter().filter(|c| c.title.ends_with('…')).count(), 5);
     }
 
+    #[test]
+    fn anagram_splits_use_no_rare_word() {
+        let c = ctx();
+        let splits = |c: Ctx| -> Vec<String> {
+            build(c, &Indicators::bundled(), thesaurus(), "begin")
+                .into_iter()
+                .find(|d| d.kind == DeviceKind::Anagram)
+                .unwrap()
+                .options
+                .into_iter()
+                .flat_map(|o| o.columns.into_iter().next().unwrap().groups)
+                .flat_map(|(_, items)| items)
+                .collect()
+        };
+        assert!(splits(c).contains(&"be gin".to_string()), "{:?}", splits(c));
+        let gin = c.lex.lookup("gin").unwrap();
+        let ratings = crate::quality::Qualities::from_vec(
+            (0..c.lex.words.len() as u32)
+                .map(|id| {
+                    if id == gin {
+                        crate::quality::Quality::Rare
+                    } else {
+                        crate::quality::Quality::Good
+                    }
+                })
+                .collect(),
+        );
+        let rated = splits(c.with_quality(&ratings));
+        assert!(!rated.contains(&"be gin".to_string()), "{rated:?}");
+        assert!(
+            rated.iter().any(|s| s.contains(' ')),
+            "other splits stay: {rated:?}"
+        );
+    }
+
     fn labels(answer: &str, kind: DeviceKind) -> Vec<String> {
         build(ctx(), &Indicators::bundled(), thesaurus(), answer)
             .into_iter()
