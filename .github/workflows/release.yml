@@ -199,6 +199,10 @@ jobs:
           echo "APP=$app" >> "$GITHUB_ENV"
           echo "MAIN_EXE=$main" >> "$GITHUB_ENV"
           echo "$app"; ls -R "$app/Contents" | head -50
+      # dx build names icon.icns in Info.plist but leaves the file out (only
+      # dx bundle copies it), so the app would show a blank icon.
+      - name: Put the icon in the app
+        run: cp app/icons/icon.icns "$APP/Contents/Resources/icon.icns"
       # vpk is a .NET 10 tool; the runners' own .NET isn't always found.
       - uses: actions/setup-dotnet@v5
         with:
@@ -222,9 +226,7 @@ jobs:
         run: |
           mkdir -p dmg
           ditto -x -k Releases/Setter-osx-Portable.zip dmg
-          ls dmg
-          ln -s /Applications dmg/Applications
-          hdiutil create -volname Setter -srcfolder dmg -ov -format UDZO Releases/Setter.dmg
+          pipx run --spec dmgbuild==2.0.0 dmgbuild -s scripts/dmg-settings.py -D app=dmg/Setter.app Setter Releases/Setter.dmg
       - name: Keep it with the run
         uses: actions/upload-artifact@v4
         with:
