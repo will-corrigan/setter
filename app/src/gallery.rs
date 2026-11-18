@@ -11,7 +11,7 @@ use crate::ds::crossword_grid::{CrosswordGrid, GridKey};
 use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
 use crate::ds::inline_edit::InlineEdit;
-use crate::ds::menu_button::MenuButton;
+use crate::ds::menu_button::{MenuButton, MenuItem};
 use crate::ds::note::Note;
 use crate::ds::notice::Notice;
 use crate::ds::prose::Prose;
@@ -250,7 +250,14 @@ fn Showcase(scope: &'static str) -> Element {
                 div { class: "gallery__row",
                     MenuButton {
                         label: "Export",
-                        items: vec!["Web page (.html)".to_string(), "Across Lite (.puz)".to_string(), "ipuz (.ipuz)".to_string()],
+                        items: vec![
+                            MenuItem::new("Open…").keys("Ctrl+O"),
+                            MenuItem::new("Save as…").keys("Ctrl+Shift+S"),
+                            MenuItem::new("Export web page…").separated(),
+                            MenuItem::new("Show in folder").disabled(true),
+                            MenuItem::heading("Recent"),
+                            MenuItem::new("Prize puzzle 12"),
+                        ],
                         on_pick: move |_| {},
                     }
                 }
@@ -327,6 +334,10 @@ fn Showcase(scope: &'static str) -> Element {
                     }
                     Icon { name: IconName::Wand }
                     Icon { name: IconName::Eraser }
+                    Icon { name: IconName::Undo }
+                    Icon { name: IconName::Redo }
+                    Icon { name: IconName::Settings }
+                    Icon { name: IconName::Search }
                 }
             }
             Section { title: "Answer bar",

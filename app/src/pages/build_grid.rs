@@ -2,6 +2,7 @@
 //! sheet on the right, with the words popover and the template picker over
 //! them.
 
+use crate::components::button::{Button, ButtonSize, ButtonVariant};
 use crate::ds::answer_bar::AnswerBar;
 use crate::ds::clue_sheet::ClueSheet;
 use crate::ds::crossword_grid::{CrosswordGrid, GridKey};
@@ -598,12 +599,34 @@ fn Bar() -> Element {
         return rsx! {};
     };
     let split = grid_fill::split_of(p, &light.id);
+    let (filled, total) = (state.filled)();
+    let working = (state.build.working)();
     rsx! {
-        AnswerBar {
-            label: light_name(&light),
-            pattern: grid_view::shown_pattern(&p.grid.pattern(&light), split),
-            split: grid_view::split_text(p, &light),
-            on_split: move |text: String| set_split(state, &text),
+        div { class: "build-grid__head",
+            AnswerBar {
+                label: light_name(&light),
+                pattern: grid_view::shown_pattern(&p.grid.pattern(&light), split),
+                split: grid_view::split_text(p, &light),
+                on_split: move |text: String| set_split(state, &text),
+            }
+            if working {
+                Button {
+                    variant: ButtonVariant::Outline,
+                    size: ButtonSize::Sm,
+                    onclick: move |_| stop_fill(state),
+                    "Stop filling"
+                }
+            } else {
+                Button {
+                    variant: ButtonVariant::Primary,
+                    size: ButtonSize::Sm,
+                    disabled: filled == total,
+                    onclick: move |_| {
+                        spawn_forever(fill_rest(state));
+                    },
+                    "Fill the rest"
+                }
+            }
         }
     }
 }

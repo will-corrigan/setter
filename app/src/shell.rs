@@ -1,32 +1,27 @@
 //! The app shell: startup, the top bar, and whichever page the mode shows.
 
 use crate::autosave;
-use crate::components::button::{Button, ButtonSize, ButtonVariant};
-use crate::ds::answer_nav::AnswerNav;
 use crate::ds::crossword_grid::GridKey;
 use crate::ds::empty_state::EmptyState;
+use crate::ds::icon::{Icon, IconName};
 use crate::ds::inline_edit::InlineEdit;
-use crate::ds::menu_button::MenuButton;
-use crate::ds::note::Note;
+use crate::ds::menu_button::{MenuButton, MenuItem};
 use crate::ds::notice::Notice;
 use crate::ds::segmented::Segmented;
 use crate::ds::top_bar::TopBar as Bar;
 use crate::export::{self, ExportFormat};
-use crate::files;
+use crate::files::{self, Theme};
+use crate::keys;
 use crate::pages::about::About;
 use crate::pages::build_grid::{self, BuildGrid};
 use crate::pages::write_clues::WriteClues;
 use crate::state::{self, AppState, Mode, Shortcut};
-use dioxus::core::spawn_forever;
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
 const PUZZLE_FILES: (&str, &[&str]) = ("Setter puzzle", &["xword"]);
-
-/// How long a button keeps asking before it goes back to normal.
-const CONFIRM_FOR: Duration = Duration::from_secs(4);
 
 /// How long the puzzle has to sit still before it is autosaved.
 const AUTOSAVE_AFTER: Duration = Duration::from_secs(1);
@@ -135,62 +130,99 @@ async fn fill_sample(mut state: AppState) {
     state.filling.set(false);
 }
 
-fn remember(mut state: AppState, path: PathBuf) {
-    state.settings.write().last_file = Some(path);
+/// `path` was opened or saved: it tops the recent list and reopens next time.
+fn remember(mut state: AppState, path: &Path) {
+    state.settings.write().opened(path);
     files::save_settings(&state.settings.peek());
 }
 
-async fn open(mut state: AppState) {
-    let picked = rfd::AsyncFileDialog::new()
-        .add_filter(PUZZLE_FILES.0, PUZZLE_FILES.1)
-        .pick_file()
-        .await;
-    let Some(file) = picked else {
+/// Open a puzzle from a file, after saving the one on screen.
+async fn open_file(state: AppState, path: PathBuf) {
+    let mut notice = state.notice;
+    if let Err(e) = save_now(state) {
+        notice.set(Some(e));
         return;
-    };
-    let path = file.path().to_path_buf();
+    }
     match files::load(&path) {
         Ok(puzzle) => {
             state.show(puzzle, Some(path.clone()));
-            remember(state, path);
+            remember(state, &path);
         }
-        Err(e) => state.notice.set(Some(e)),
+        Err(e) => notice.set(Some(e)),
     }
 }
 
-/// Save to the puzzle's file, or ask where if it has none or `ask` is set
-/// (Save as).
-async fn save(mut state: AppState, ask: bool) {
-    let Some(title) = state.puzzle.peek().as_ref().map(|p| p.title.clone()) else {
+async fn open(state: AppState) {
+    let mut dialog = rfd::AsyncFileDialog::new().add_filter(PUZZLE_FILES.0, PUZZLE_FILES.1);
+    if let Some(dir) = state.path.peek().as_ref().and_then(|p| p.parent()) {
+        dialog = dialog.set_directory(dir);
+    }
+    if let Some(file) = dialog.pick_file().await {
+        open_file(state, file.path().to_path_buf()).await;
+    }
+}
+
+/// Write the puzzle to its file now, if it has changed. A puzzle without a
+/// file gets one in the Setter folder, named after its title.
+pub fn save_now(state: AppState) -> Result<(), String> {
+    let Some(puzzle) = state.puzzle.peek().clone() else {
+        return Ok(());
+    };
+    if !state::unsaved(Some(&puzzle), state.pristine.peek().as_ref()) {
+        return Ok(());
+    }
+    let path = state
+        .path
+        .peek()
+        .clone()
+        .unwrap_or_else(|| files::new_file_in(&files::library_dir(), &puzzle.title));
+    files::save(&path, &puzzle)?;
+    let first = state.path.peek().is_none();
+    state.saved_to(path.clone(), puzzle);
+    if first {
+        remember(state, &path);
+    }
+    Ok(())
+}
+
+/// Save as: choose a new name and place; the puzzle carries on from there.
+async fn save_as(state: AppState) {
+    let mut notice = state.notice;
+    let Some(puzzle) = state.puzzle.peek().clone() else {
         return;
     };
     let known = state.path.peek().clone();
-    let path = match known {
-        Some(path) if !ask => path,
-        _ => {
-            let mut dialog = rfd::AsyncFileDialog::new()
-                .add_filter(PUZZLE_FILES.0, PUZZLE_FILES.1)
-                .set_file_name(format!("{}.xword", export::file_stem(&title)));
-            if let Some(dir) = known.as_ref().and_then(|p| p.parent()) {
-                dialog = dialog.set_directory(dir);
-            }
-            match dialog.save_file().await {
-                Some(file) => with_xword(file.path()),
-                None => return,
-            }
-        }
+    let mut dialog = rfd::AsyncFileDialog::new()
+        .add_filter(PUZZLE_FILES.0, PUZZLE_FILES.1)
+        .set_file_name(format!("{}.xword", export::file_stem(&puzzle.title)));
+    if let Some(dir) = known.as_ref().and_then(|p| p.parent()) {
+        dialog = dialog.set_directory(dir);
+    }
+    let Some(file) = dialog.save_file().await else {
+        return;
     };
-    // Taken after the dialog, so typing while it was open is saved too.
+    let path = with_xword(file.path());
+    // Taken after the dialog, so typing while it was open goes too.
     let Some(puzzle) = state.puzzle.peek().clone() else {
         return;
     };
     match files::save(&path, &puzzle) {
         Ok(()) => {
-            // Typing while it was written still counts as unsaved.
             state.saved_to(path.clone(), puzzle);
-            remember(state, path);
+            remember(state, &path);
         }
-        Err(e) => state.notice.set(Some(e)),
+        Err(e) => notice.set(Some(e)),
+    }
+}
+
+/// Show the puzzle's file in the system's file manager.
+fn show_in_folder(state: AppState) {
+    let mut notice = state.notice;
+    let Some(path) = state.path.peek().clone() else {
+        return;
+    };
+    if let Err(e) = files::reveal(&path) {
+        notice.set(Some(format!("Couldn't show the folder: {e}")));
     }
 }
 
@@ -281,8 +313,16 @@ fn use_shortcuts(state: AppState) {
                 match state::shortcut(&key, alt, ctrl, shift) {
                     Some(Shortcut::PreviousAnswer) => step_answer(state, -1),
                     Some(Shortcut::NextAnswer) => step_answer(state, 1),
-                    Some(Shortcut::Save) => save(state, false).await,
-                    Some(Shortcut::SaveAs) => save(state, true).await,
+                    Some(Shortcut::Save) => {
+                        if let Err(e) = save_now(state) {
+                            let mut notice = state.notice;
+                            notice.set(Some(e));
+                        }
+                    }
+                    Some(Shortcut::SaveAs) => save_as(state).await,
+                    Some(Shortcut::New) => new_puzzle(state),
+                    Some(Shortcut::Open) => open(state).await,
+                    Some(Shortcut::Export) => export(state, ExportFormat::WebPage).await,
                     Some(Shortcut::Undo) => build_grid::undo(state),
                     Some(Shortcut::Redo) => build_grid::redo(state),
                     Some(Shortcut::Words) => build_grid::toggle_words(state),
@@ -293,8 +333,8 @@ fn use_shortcuts(state: AppState) {
     });
 }
 
-/// Keep unsaved work in the autosave file, a second after it last changed;
-/// once nothing is unsaved, the autosave goes.
+/// Save the puzzle to its own file a second after it last changed. (The old
+/// separate autosave file is cleared once everything is saved.)
 fn use_autosave(state: AppState) {
     let mut pending = use_signal(|| None::<dioxus::core::Task>);
     use_effect(move || {
@@ -307,27 +347,18 @@ fn use_autosave(state: AppState) {
             autosave::Step::Remove => autosave::remove_autosave(),
             autosave::Step::Write => pending.set(Some(spawn(async move {
                 tokio::time::sleep(AUTOSAVE_AFTER).await;
-                if let Err(e) = write_autosave_now(state) {
+                if let Err(e) = save_now(state) {
                     let mut notice = state.notice;
-                    notice.set(Some(format!("Couldn't autosave: {e}")));
+                    notice.set(Some(format!("Couldn't save: {e}")));
                 }
             }))),
         }
     });
 }
 
-/// Write the autosave straight away if there is unsaved work, e.g. as the
-/// window closes.
+/// Save straight away if anything has changed, e.g. as the window closes.
 pub fn write_autosave_now(state: AppState) -> Result<(), String> {
-    let puzzle = state.puzzle.peek();
-    let pristine = state.pristine.peek();
-    if autosave::step(puzzle.as_ref(), pristine.as_ref()) != autosave::Step::Write {
-        return Ok(());
-    }
-    let Some(p) = puzzle.as_ref() else {
-        return Ok(());
-    };
-    autosave::write_autosave(p, state.path.peek().as_deref())
+    save_now(state)
 }
 
 fn use_theme(state: AppState) {
@@ -365,73 +396,193 @@ pub fn Shell() -> Element {
     }
 }
 
-/// Actions that replace the puzzle on screen.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Replace {
-    Open,
-    NewSample,
-    /// Choose a grid for a new, empty puzzle.
-    NewPuzzle,
+/// Start a new, empty puzzle: choose its grid on Build grid. The puzzle on
+/// screen is saved first.
+fn new_puzzle(mut state: AppState) {
+    if let Err(e) = save_now(state) {
+        state.notice.set(Some(e));
+        return;
+    }
+    state.set_mode(Mode::BuildGrid);
+    state.build.picker_open.set(true);
 }
 
-/// Is this button asking before it throws unsaved clues away?
-fn is_asking(action: Replace, asking: Option<Replace>, dirty: bool) -> bool {
-    dirty && asking == Some(action)
+async fn new_sample(mut state: AppState) {
+    if let Err(e) = save_now(state) {
+        state.notice.set(Some(e));
+        return;
+    }
+    fill_sample(state).await;
+}
+
+/// What the File menu does.
+#[derive(Clone, PartialEq, Debug)]
+pub enum FileAction {
+    NewPuzzle,
+    NewSample,
+    Open,
+    SaveAs,
+    ShowInFolder,
+    Export(ExportFormat),
+    Recent(PathBuf),
+}
+
+/// The File menu: its lines and what each does. `recent` are other puzzles
+/// to reopen; "Show in folder" needs the puzzle to have a file.
+pub fn file_menu(recent: &[PathBuf], has_file: bool, busy: bool) -> Vec<(MenuItem, FileAction)> {
+    let mut out = vec![
+        (
+            MenuItem::new("New puzzle…")
+                .keys(keys::label("Ctrl+N"))
+                .disabled(busy),
+            FileAction::NewPuzzle,
+        ),
+        (
+            MenuItem::new("New filled sample").disabled(busy),
+            FileAction::NewSample,
+        ),
+        (
+            MenuItem::new("Open…")
+                .keys(keys::label("Ctrl+O"))
+                .disabled(busy),
+            FileAction::Open,
+        ),
+        (
+            MenuItem::new("Save as…")
+                .keys(keys::label("Ctrl+Shift+S"))
+                .separated(),
+            FileAction::SaveAs,
+        ),
+        (
+            MenuItem::new("Show in folder").disabled(!has_file),
+            FileAction::ShowInFolder,
+        ),
+        (
+            MenuItem::new("Export web page…")
+                .keys(keys::label("Ctrl+E"))
+                .separated(),
+            FileAction::Export(ExportFormat::WebPage),
+        ),
+        (
+            MenuItem::new("Export Across Lite (.puz)…"),
+            FileAction::Export(ExportFormat::Puz),
+        ),
+        (
+            MenuItem::new("Export ipuz…"),
+            FileAction::Export(ExportFormat::Ipuz),
+        ),
+    ];
+    for (i, path) in recent.iter().take(RECENT_SHOWN).enumerate() {
+        let name = path
+            .file_stem()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let mut item = MenuItem::new(name).disabled(busy);
+        if i == 0 {
+            item.separated = true;
+        }
+        out.push((item, FileAction::Recent(path.clone())));
+    }
+    out
+}
+
+/// How many recent puzzles the File menu lists.
+const RECENT_SHOWN: usize = 5;
+
+/// What the settings menu does.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum SettingsAction {
+    Theme(Theme),
+    WordLists,
+    About,
+}
+
+/// The settings menu; a heading has no action.
+pub fn settings_menu(theme: Theme) -> Vec<(MenuItem, Option<SettingsAction>)> {
+    let choice = |label: &str, t: Theme| {
+        (
+            MenuItem::new(label).checked(theme == t),
+            Some(SettingsAction::Theme(t)),
+        )
+    };
+    vec![
+        (MenuItem::heading("Theme"), None),
+        choice("Match the system", Theme::System),
+        choice("Light", Theme::Light),
+        choice("Dark", Theme::Dark),
+        (
+            MenuItem::new("My word lists").separated(),
+            Some(SettingsAction::WordLists),
+        ),
+        (MenuItem::new("About Setter"), Some(SettingsAction::About)),
+    ]
+}
+
+fn run_file_action(state: AppState, action: FileAction) {
+    match action {
+        FileAction::NewPuzzle => new_puzzle(state),
+        FileAction::NewSample => {
+            spawn(async move { new_sample(state).await });
+        }
+        FileAction::Open => {
+            spawn(async move { open(state).await });
+        }
+        FileAction::SaveAs => {
+            spawn(async move { save_as(state).await });
+        }
+        FileAction::ShowInFolder => show_in_folder(state),
+        FileAction::Export(format) => {
+            spawn(async move { export(state, format).await });
+        }
+        FileAction::Recent(path) => {
+            spawn(async move { open_file(state, path).await });
+        }
+    }
+}
+
+fn run_settings_action(mut state: AppState, action: SettingsAction) {
+    match action {
+        SettingsAction::Theme(theme) => {
+            state.settings.write().theme = theme;
+            files::save_settings(&state.settings.peek());
+        }
+        SettingsAction::WordLists => {
+            if let Err(e) = files::reveal(&files::config_dir()) {
+                state
+                    .notice
+                    .set(Some(format!("Couldn't show the folder: {e}")));
+            }
+        }
+        SettingsAction::About => state.credits.toggle(),
+    }
 }
 
 #[component]
 fn TopBar() -> Element {
-    let mut state = use_context::<AppState>();
-    // The button that is asking before it throws unsaved clues away.
-    let mut asking = use_signal(|| None::<Replace>);
-    let mut asking_timer = use_signal(|| None::<dioxus::core::Task>);
-
-    let mut replace = move |action: Replace| {
-        if let Some(timer) = asking_timer.take() {
-            timer.cancel();
-        }
-        let loses = *state.dirty.peek();
-        if loses && *asking.peek() != Some(action) {
-            asking.set(Some(action));
-            asking_timer.set(Some(spawn(async move {
-                tokio::time::sleep(CONFIRM_FOR).await;
-                asking.set(None);
-            })));
-            return;
-        }
-        asking.set(None);
-        spawn(async move {
-            match action {
-                Replace::Open => open(state).await,
-                Replace::NewSample => fill_sample(state).await,
-                Replace::NewPuzzle => state.build.picker_open.set(true),
-            }
-        });
-    };
-    let dirty = (state.dirty)();
-    let replace_button = move |action: Replace, label: &'static str| {
-        if is_asking(action, asking(), dirty) {
-            (ButtonVariant::Destructive, "Discard changes?")
-        } else {
-            (ButtonVariant::Outline, label)
-        }
-    };
-
+    let state = use_context::<AppState>();
     let ready = (state.ready)();
-    let building = (state.mode)() == Mode::BuildGrid;
     // A fill is running: the puzzle can't be changed or replaced until it ends.
     let working = (state.build.working)();
-    let answer = (state.answer)().filter(|_| ready && !building);
-    let (clued, total) = (state.clued)();
-    let (filled, _) = (state.filled)();
     let (can_undo, can_redo) = {
         let history = state.history.read();
         (history.can_undo(), history.can_redo())
     };
     let theme = state.settings.read().theme;
-    let (open_style, open_label) = replace_button(Replace::Open, "Open");
-    let (sample_style, sample_label) = replace_button(Replace::NewSample, "New sample");
-    let (new_style, new_label) = replace_button(Replace::NewPuzzle, "New puzzle");
+    let path = state.path.read().clone();
+    let recent: Vec<PathBuf> = state
+        .settings
+        .read()
+        .recent
+        .iter()
+        .filter(|p| Some(*p) != path.as_ref())
+        .cloned()
+        .collect();
+    let (file_items, file_actions): (Vec<_>, Vec<_>) =
+        file_menu(&recent, path.is_some(), !ready || working)
+            .into_iter()
+            .unzip();
+    let (settings_items, settings_actions): (Vec<_>, Vec<_>) =
+        settings_menu(theme).into_iter().unzip();
     let (title, setter) = state
         .puzzle
         .read()
@@ -442,137 +593,69 @@ fn TopBar() -> Element {
         Bar {
             brand: "Setter",
             start: rsx! {
-            Segmented {
-                label: "Mode",
-                options: Mode::ALL.map(|m| m.label().to_string()).to_vec(),
-                selected: (state.mode)().index(),
-                on_change: move |i| state.set_mode(Mode::from_index(i)),
-            }
-            if building && ready {
-                div { class: "topbar__details",
-                    InlineEdit {
-                        value: title,
-                        placeholder: "Untitled",
-                        label: "Puzzle title",
-                        on_change: move |t| state.set_title(t),
-                    }
-                    InlineEdit {
-                        value: setter,
-                        placeholder: "Setter",
-                        label: "Setter",
-                        on_change: move |name| state.set_setter(name),
+                if ready {
+                    div { class: "topbar__details",
+                        InlineEdit {
+                            value: title,
+                            placeholder: "Untitled",
+                            label: "Puzzle title",
+                            on_change: move |t| state.set_title(t),
+                        }
+                        InlineEdit {
+                            value: setter,
+                            placeholder: "Setter",
+                            label: "Setter",
+                            on_change: move |name| state.set_setter(name),
+                        }
                     }
                 }
-            }
-            if building {
-                Button {
-                    variant: new_style,
-                    size: ButtonSize::Sm,
-                    disabled: !ready || working,
-                    onclick: move |_| replace(Replace::NewPuzzle),
-                    "{new_label}"
+            },
+            middle: rsx! {
+                Segmented {
+                    label: "Mode",
+                    options: Mode::ALL.map(|m| m.label().to_string()).to_vec(),
+                    selected: (state.mode)().index(),
+                    on_change: move |i| state.set_mode(Mode::from_index(i)),
                 }
-            }
-            if let Some(answer) = answer {
-                AnswerNav {
-                    word: state::answer_letters(&answer.pattern),
-                    label: "{answer.label} · {answer.enumeration}",
-                    on_step: move |delta| state.step(delta),
-                }
-            }
             },
             end: rsx! {
-            if building {
-                if ready && total > 0 {
-                    Note { text: "{filled} of {total} filled" }
-                }
-                if working {
-                    Button {
-                        variant: ButtonVariant::Outline,
-                        size: ButtonSize::Sm,
-                        onclick: move |_| build_grid::stop_fill(state),
-                        "Stop filling"
-                    }
-                } else {
-                    Button {
-                        variant: ButtonVariant::Primary,
-                        size: ButtonSize::Sm,
-                        disabled: !ready || filled == total,
-                        onclick: move |_| {
-                            spawn_forever(build_grid::fill_rest(state));
-                        },
-                        "Fill the rest"
-                    }
-                }
-                Button {
-                    variant: ButtonVariant::Ghost,
-                    size: ButtonSize::Sm,
+                button {
+                    class: "topbar__icon",
+                    r#type: "button",
+                    "aria-label": "Undo",
+                    title: keys::tip("Undo", "Ctrl+Z"),
                     disabled: !ready || working || !can_undo,
-                    title: "Undo (Ctrl+Z)",
                     onclick: move |_| build_grid::undo(state),
-                    "Undo"
+                    Icon { name: IconName::Undo }
                 }
-                Button {
-                    variant: ButtonVariant::Ghost,
-                    size: ButtonSize::Sm,
+                button {
+                    class: "topbar__icon",
+                    r#type: "button",
+                    "aria-label": "Redo",
+                    title: keys::tip("Redo", "Ctrl+Shift+Z"),
                     disabled: !ready || working || !can_redo,
-                    title: "Redo (Ctrl+Shift+Z)",
                     onclick: move |_| build_grid::redo(state),
-                    "Redo"
+                    Icon { name: IconName::Redo }
                 }
-            } else if ready && total > 0 {
-                Note { text: "{clued} of {total} clued" }
-            }
-            Button {
-                variant: open_style,
-                size: ButtonSize::Sm,
-                disabled: !ready || working,
-                onclick: move |_| replace(Replace::Open),
-                "{open_label}"
-            }
-            Button {
-                variant: if dirty { ButtonVariant::Primary } else { ButtonVariant::Outline },
-                size: ButtonSize::Sm,
-                disabled: !ready,
-                title: "Save (Ctrl+S) · Save as (Ctrl+Shift+S)",
-                onclick: move |_| async move { save(state, false).await },
-                "Save"
-            }
-            if ready {
                 MenuButton {
-                    label: "Export",
-                    items: ExportFormat::ALL.map(|f| f.label().to_string()).to_vec(),
+                    label: "File",
+                    items: file_items,
                     on_pick: move |i: usize| {
-                        let format = ExportFormat::ALL[i];
-                        spawn(async move { export(state, format).await });
+                        if let Some(action) = file_actions.get(i) {
+                            run_file_action(state, action.clone());
+                        }
                     },
                 }
-            }
-            if !building {
-                Button {
-                    variant: sample_style,
-                    size: ButtonSize::Sm,
-                    disabled: !ready || working,
-                    onclick: move |_| replace(Replace::NewSample),
-                    "{sample_label}"
+                MenuButton {
+                    label: "Settings",
+                    icon: rsx! { Icon { name: IconName::Settings } },
+                    items: settings_items,
+                    on_pick: move |i: usize| {
+                        if let Some(Some(action)) = settings_actions.get(i) {
+                            run_settings_action(state, *action);
+                        }
+                    },
                 }
-            }
-            Button {
-                variant: ButtonVariant::Ghost,
-                size: ButtonSize::Sm,
-                onclick: move |_| {
-                    let next = state::next_theme(state.settings.peek().theme);
-                    state.settings.write().theme = next;
-                    files::save_settings(&state.settings.peek());
-                },
-                "{state::theme_label(theme)}"
-            }
-            Button {
-                variant: ButtonVariant::Ghost,
-                size: ButtonSize::Sm,
-                onclick: move |_| state.credits.toggle(),
-                if (state.credits)() { "Close credits" } else { "Credits" }
-            }
             },
         }
     }
@@ -606,23 +689,8 @@ mod tests {
         })
     }
 
-    #[test]
-    fn top_bar_has_everything_in_order() {
-        let html = shell(|state| state.show(puzzle(), None));
-        let order = [
-            "topbar__logo",
-            ">Build grid<",
-            ">Write clues<",
-            "answer-nav",
-            ">C·T<",
-            ">1a · 3<",
-            "topbar__spacer",
-            ">1 of 4 clued<",
-            ">Open<",
-            ">Save<",
-            ">New sample<",
-            ">Theme: dark<",
-        ];
+    /// Pieces in order in the html, or a panic naming the first missing.
+    fn in_order(html: &str, order: &[&str]) {
         let mut from = 0;
         for piece in order {
             let at = html[from..]
@@ -630,12 +698,57 @@ mod tests {
                 .unwrap_or_else(|| panic!("{piece} missing or out of order: {html}"));
             from += at;
         }
-        assert!(html.contains(">Setter<"), "{html}");
-        // Write clues is the page on show.
-        assert!(
-            html.contains("shell__body") && html.contains("side-nav"),
-            "{html}"
-        );
+    }
+
+    #[test]
+    fn the_top_bar_is_the_same_on_both_pages() {
+        for mode in [Mode::BuildGrid, Mode::WriteClues] {
+            let html = shell(move |mut state| {
+                state.show(puzzle(), None);
+                state.mode.set(mode);
+            });
+            let end = html.find("</header>").expect("top bar");
+            let bar = &html[..end];
+            in_order(
+                bar,
+                &[
+                    "topbar__logo",
+                    r#"aria-label="Puzzle title""#,
+                    r#"aria-label="Setter""#,
+                    ">Build grid<",
+                    ">Write clues<",
+                    r#"aria-label="Undo""#,
+                    r#"aria-label="Redo""#,
+                    ">File<",
+                    r#"aria-label="Settings""#,
+                ],
+            );
+            // Page actions live in the pages, not the bar.
+            for gone in [
+                "Fill the rest",
+                "answer-nav",
+                "Theme:",
+                "Credits",
+                ">Save<",
+                "New sample",
+            ] {
+                assert!(!bar.contains(gone), "{gone} in the bar: {bar}");
+            }
+        }
+    }
+
+    #[test]
+    fn page_actions_sit_in_their_pages() {
+        let grid = shell(|mut state| {
+            state.show(puzzle(), None);
+            state.mode.set(Mode::BuildGrid);
+        });
+        let end = grid.find("</header>").unwrap();
+        assert!(grid[end..].contains(">Fill the rest<"), "{grid}");
+        let clues = shell(|state| state.show(puzzle(), None));
+        let end = clues.find("</header>").unwrap();
+        assert!(clues[end..].contains("answer-nav"), "{clues}");
+        assert!(clues[end..].contains(">1 of 4 clued<"), "{clues}");
     }
 
     #[test]
@@ -664,49 +777,16 @@ mod tests {
         assert!(!html.contains("side-nav"), "{html}");
     }
 
-    #[test]
-    fn build_grid_has_its_own_top_bar() {
-        let html = shell(|mut state| {
-            state.show(puzzle(), None);
-            state.mode.set(Mode::BuildGrid);
-        });
-        let order = [
-            "topbar__logo",
-            ">Build grid<",
-            ">Write clues<",
-            ">New puzzle<",
-            "topbar__spacer",
-            ">3 of 4 filled<",
-            ">Fill the rest<",
-            ">Undo<",
-            ">Redo<",
-            ">Open<",
-            ">Save<",
-            ">Theme: dark<",
-        ];
-        let mut from = 0;
-        for piece in order {
-            let at = html[from..]
-                .find(piece)
-                .unwrap_or_else(|| panic!("{piece} missing or out of order: {html}"));
-            from += at;
-        }
-        // The answer navigator and New sample belong to Write clues.
-        assert!(!html.contains("answer-nav"), "{html}");
-        assert!(!html.contains(">New sample<"), "{html}");
-        assert!(!html.contains("clued<"), "{html}");
-        // Shortcuts are named in tooltips only.
-        assert!(html.contains(r#"title="Undo (Ctrl+Z)""#), "{html}");
-        assert!(html.contains(r#"title="Redo (Ctrl+Shift+Z)""#), "{html}");
-        assert!(!html.contains(">Undo (Ctrl+Z)<"), "{html}");
-    }
-
-    /// The opening tag of the top-bar button with this label.
-    fn button(html: &str, label: &str) -> String {
-        let before = &html[..html
-            .find(&format!(">{label}<"))
-            .unwrap_or_else(|| panic!("{label}: {html}"))];
-        before[before.rfind("<button").unwrap()..].to_string()
+    /// The opening tag of the button with this aria-label or text.
+    fn button(html: &str, name: &str) -> String {
+        let at = html
+            .find(&format!(r#"aria-label="{name}""#))
+            .or_else(|| html.find(&format!(">{name}<")))
+            .unwrap_or_else(|| panic!("{name}: {html}"));
+        let before = &html[..at];
+        let start = before.rfind("<button").unwrap();
+        let close = html[start..].find('>').unwrap();
+        html[start..start + close].to_string()
     }
 
     #[test]
@@ -733,10 +813,15 @@ mod tests {
             button(&edited, "Fill the rest").contains("disabled"),
             "{edited}"
         );
+        // Shortcuts are named in tooltips, for this platform.
+        assert!(
+            edited.contains(&format!(r#"title="Undo ({})""#, keys::label("Ctrl+Z"))),
+            "{edited}"
+        );
     }
 
     #[test]
-    fn while_a_fill_runs_the_grid_cannot_be_changed_or_replaced() {
+    fn while_a_fill_runs_it_can_be_stopped_and_nothing_else_changes() {
         let html = shell(|mut state| {
             state.show(puzzle(), None);
             state.mode.set(Mode::BuildGrid);
@@ -744,52 +829,103 @@ mod tests {
             state.build.working.set(true);
         });
         assert!(!html.contains(">Fill the rest<"), "{html}");
-        for label in ["Undo", "New puzzle", "Open"] {
-            assert!(button(&html, label).contains("disabled"), "{label}: {html}");
-        }
-        for label in ["Save", "Stop filling"] {
-            assert!(
-                !button(&html, label).contains("disabled"),
-                "{label}: {html}"
+        assert!(
+            !button(&html, "Stop filling").contains("disabled"),
+            "{html}"
+        );
+        assert!(button(&html, "Undo").contains("disabled"), "{html}");
+    }
+
+    #[test]
+    fn the_file_menu_in_order_with_recent_puzzles() {
+        let recent = [
+            PathBuf::from("/p/Prize 12.xword"),
+            PathBuf::from("/p/Mini.xword"),
+        ];
+        let menu = file_menu(&recent, true, false);
+        let labels: Vec<&str> = menu.iter().map(|(m, _)| m.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "New puzzle…",
+                "New filled sample",
+                "Open…",
+                "Save as…",
+                "Show in folder",
+                "Export web page…",
+                "Export Across Lite (.puz)…",
+                "Export ipuz…",
+                "Prize 12",
+                "Mini",
+            ]
+        );
+        assert_eq!(
+            menu[0].0.keys.as_deref(),
+            Some(keys::label("Ctrl+N").as_str())
+        );
+        assert_eq!(menu[8].1, FileAction::Recent(recent[0].clone()));
+        assert!(
+            menu[8].0.separated,
+            "recent puzzles are a group of their own"
+        );
+        // No file yet: nothing to show in a folder.
+        let fresh = file_menu(&[], false, false);
+        assert!(
+            fresh
+                .iter()
+                .find(|(m, _)| m.label == "Show in folder")
+                .unwrap()
+                .0
+                .disabled
+        );
+        // While a fill runs, nothing that replaces the puzzle.
+        let busy = file_menu(&recent, true, true);
+        for (m, a) in &busy {
+            let replaces = matches!(
+                a,
+                FileAction::NewPuzzle
+                    | FileAction::NewSample
+                    | FileAction::Open
+                    | FileAction::Recent(_)
             );
+            assert_eq!(m.disabled, replaces, "{}", m.label);
         }
     }
 
     #[test]
-    fn export_sits_after_save_on_both_pages() {
-        for mode in [Mode::BuildGrid, Mode::WriteClues] {
-            let html = shell(move |mut state| {
-                state.show(puzzle(), None);
-                state.mode.set(mode);
+    fn the_settings_menu_ticks_the_theme_in_use() {
+        let menu = settings_menu(Theme::Dark);
+        let ticked: Vec<&str> = menu
+            .iter()
+            .filter(|(m, _)| m.checked == Some(true))
+            .map(|(m, _)| m.label.as_str())
+            .collect();
+        assert_eq!(ticked, ["Dark"]);
+        assert!(menu.iter().any(|(_, a)| *a == Some(SettingsAction::About)));
+        assert!(menu[0].0.heading && menu[0].1.is_none(), "headed Theme");
+    }
+
+    #[test]
+    fn changes_are_saved_to_a_new_file_in_the_setter_folder() {
+        let said = render(|| {
+            let state = use_app_state(Settings::default);
+            let result = use_hook(|| {
+                let mut p = puzzle();
+                p.title = "Autosave test".into();
+                state.show(p, None);
+                state.edit(|p| crate::grid_edit::place(p, "0,0,a", "cot"));
+                save_now(state).map(|_| state.path.peek().clone())
             });
-            let save = html.find(">Save<").expect("save");
-            let export = html
-                .find(">Export<")
-                .unwrap_or_else(|| panic!("{mode:?}: {html}"));
-            assert!(save < export, "{html}");
-            assert!(html.contains(r#"aria-haspopup="menu""#), "{html}");
-        }
-        // Nothing to export yet.
-        assert!(!shell(|_| {}).contains(">Export<"));
-    }
-
-    #[test]
-    fn build_grid_shows_the_title_and_setter_to_edit() {
-        let html = shell(|mut state| {
-            let mut p = puzzle();
-            p.title = "Prize 12".into();
-            state.show(p, None);
-            state.mode.set(Mode::BuildGrid);
+            let path = result.clone().unwrap().unwrap();
+            let in_library = path.starts_with(files::library_dir());
+            let written = files::load(&path)
+                .map(|p| p.grid.pattern(&p.grid.lights()[0]))
+                .unwrap_or_default();
+            let clean = !(state.dirty)();
+            let _ = std::fs::remove_file(&path);
+            rsx! { "{in_library} {written} {clean}" }
         });
-        let details = html.find("topbar__details").expect("details");
-        let title = html.find(">Prize 12<").expect("title");
-        let setter = html.find(r#"aria-label="Setter""#).expect("setter");
-        let new = html.find(">New puzzle<").unwrap();
-        assert!(details < title && title < setter && setter < new, "{html}");
-        // No setter yet: the placeholder says what goes there.
-        assert!(html.contains(">Setter<"), "{html}");
-        let clues = shell(|state| state.show(puzzle(), None));
-        assert!(!clues.contains("topbar__details"), "{clues}");
+        assert_eq!(said, "true cot true");
     }
 
     #[test]
@@ -806,25 +942,6 @@ mod tests {
     }
 
     #[test]
-    fn unsaved_puzzles_make_save_the_main_button() {
-        let saved = shell(|state| state.show(puzzle(), None));
-        let unsaved = shell(|state| {
-            state.show(puzzle(), None);
-            // Letters alone are work to keep, clues or not.
-            state.edit(|p| crate::grid_edit::place(p, "0,0,a", "cot"));
-        });
-        let recovered = shell(|state| state.recover(puzzle(), None));
-        let save_style = |html: &str| {
-            let before = &html[..html.find(">Save<").unwrap()];
-            let tag = &before[before.rfind("<button").unwrap()..];
-            tag.contains(r#"data-style="primary""#)
-        };
-        assert!(!save_style(&saved), "{saved}");
-        assert!(save_style(&unsaved), "{unsaved}");
-        assert!(save_style(&recovered), "{recovered}");
-    }
-
-    #[test]
     fn warnings_become_one_line() {
         let toml = "abbreviations.toml: TOML parse error at line 1, column 6\n  |\n1 | this is = not [toml\n";
         assert_eq!(
@@ -833,16 +950,6 @@ mod tests {
         );
         assert_eq!(warning_line(&[]), None);
         assert_eq!(warning_line(&["\n".to_string()]), None);
-    }
-
-    #[test]
-    fn a_button_asks_only_while_there_are_unsaved_clues() {
-        let asking = Some(Replace::NewSample);
-        assert!(is_asking(Replace::NewSample, asking, true));
-        assert!(!is_asking(Replace::Open, asking, true));
-        assert!(!is_asking(Replace::NewSample, None, true));
-        // Saved in the meantime: nothing to ask about.
-        assert!(!is_asking(Replace::NewSample, asking, false));
     }
 
     #[test]

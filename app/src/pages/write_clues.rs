@@ -1,5 +1,6 @@
 //! Write clues: the device list, the answer tiles, the clue, and the word bank.
 
+use crate::ds::answer_nav::AnswerNav;
 use crate::ds::clue_field::ClueField;
 use crate::ds::empty_state::EmptyState;
 use crate::ds::inline_edit::InlineEdit;
@@ -99,6 +100,7 @@ fn Head() -> Element {
             .any(|c| c.tone == xw_engine::bank::Tone::Definition)
     });
     let definition_last = state.settings.read().definition_last;
+    let (clued, total) = (state.clued)();
     rsx! {
         div { class: "clue-head",
             Tiles { tiles }
@@ -124,6 +126,14 @@ fn Head() -> Element {
                         selected: usize::from(definition_last),
                         on_change: move |i: usize| state.set_definition_last(i == 1),
                     }
+                }
+            }
+            div { class: "clue-head__nav",
+                Note { text: "{clued} of {total} clued" }
+                AnswerNav {
+                    word: state::answer_letters(&answer.pattern),
+                    label: "{answer.label} · {answer.enumeration}",
+                    on_step: move |delta| state.step(delta),
                 }
             }
         }

@@ -323,22 +323,6 @@ pub fn plain_tiles(pattern: &str) -> Vec<Tile> {
 
 // ---------- theme ----------
 
-pub fn next_theme(theme: Theme) -> Theme {
-    match theme {
-        Theme::System => Theme::Light,
-        Theme::Light => Theme::Dark,
-        Theme::Dark => Theme::System,
-    }
-}
-
-pub fn theme_label(theme: Theme) -> &'static str {
-    match theme {
-        Theme::System => "Theme: system",
-        Theme::Light => "Theme: light",
-        Theme::Dark => "Theme: dark",
-    }
-}
-
 /// JavaScript that applies a theme to the page.
 pub fn theme_script(theme: Theme) -> &'static str {
     match theme {
@@ -356,6 +340,9 @@ pub enum Shortcut {
     NextAnswer,
     Save,
     SaveAs,
+    New,
+    Open,
+    Export,
     Undo,
     Redo,
     /// Open or close the words popover.
@@ -372,11 +359,14 @@ impl Shortcut {
 
 /// (key, Alt held, Ctrl held, Shift held, action). The page's key listener
 /// and `shortcut` both read this table.
-pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 7] = [
+pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 10] = [
     ("arrowleft", true, false, false, Shortcut::PreviousAnswer),
     ("arrowright", true, false, false, Shortcut::NextAnswer),
     ("s", false, true, false, Shortcut::Save),
     ("s", false, true, true, Shortcut::SaveAs),
+    ("n", false, true, false, Shortcut::New),
+    ("o", false, true, false, Shortcut::Open),
+    ("e", false, true, false, Shortcut::Export),
     ("z", false, true, false, Shortcut::Undo),
     ("z", false, true, true, Shortcut::Redo),
     (" ", false, true, false, Shortcut::Words),
@@ -1246,14 +1236,10 @@ mod tests {
     }
 
     #[test]
-    fn theme_cycles_system_light_dark() {
-        assert_eq!(next_theme(Theme::System), Theme::Light);
-        assert_eq!(next_theme(Theme::Light), Theme::Dark);
-        assert_eq!(next_theme(Theme::Dark), Theme::System);
+    fn each_theme_has_a_script() {
         assert!(theme_script(Theme::System).starts_with("delete "));
         assert!(theme_script(Theme::Dark).ends_with("dataset.theme = 'dark'"));
         assert!(theme_script(Theme::Light).ends_with("dataset.theme = 'light'"));
-        assert_eq!(theme_label(Theme::System), "Theme: system");
     }
 
     #[test]

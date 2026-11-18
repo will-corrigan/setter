@@ -34,10 +34,7 @@ pub fn step(puzzle: Option<&Puzzle>, pristine: Option<&Puzzle>) -> Step {
     }
 }
 
-pub fn write_autosave(p: &Puzzle, source: Option<&Path>) -> Result<(), String> {
-    write_autosave_in(&crate::files::config_dir(), p, source)
-}
-
+#[cfg(test)]
 pub fn write_autosave_in(dir: &Path, p: &Puzzle, source: Option<&Path>) -> Result<(), String> {
     crate::files::save(&autosave_path(dir), p)?;
     match source {

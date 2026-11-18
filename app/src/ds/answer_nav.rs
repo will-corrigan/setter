@@ -20,7 +20,7 @@ pub fn AnswerNav(
                 variant: ButtonVariant::Outline,
                 size: ButtonSize::IconXs,
                 aria_label: "Previous answer",
-                title: "Previous answer (Alt+←)",
+                title: crate::keys::tip("Previous answer", "Alt+←"),
                 onclick: move |_| on_step.call(-1),
                 "‹"
             }
@@ -32,7 +32,7 @@ pub fn AnswerNav(
                 variant: ButtonVariant::Outline,
                 size: ButtonSize::IconXs,
                 aria_label: "Next answer",
-                title: "Next answer (Alt+→)",
+                title: crate::keys::tip("Next answer", "Alt+→"),
                 onclick: move |_| on_step.call(1),
                 "›"
             }

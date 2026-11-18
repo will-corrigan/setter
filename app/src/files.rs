@@ -195,6 +195,81 @@ pub struct Settings {
     /// Picked definitions go at the end of the clue, not the start.
     #[serde(default)]
     pub definition_last: bool,
+    /// Puzzles opened or saved lately, most recent first.
+    #[serde(default)]
+    pub recent: Vec<PathBuf>,
+}
+
+/// How many recent puzzles are remembered.
+pub const RECENT: usize = 8;
+
+impl Settings {
+    /// `path` was just opened or saved: it goes to the top of the recent
+    /// list and is the puzzle to reopen next time.
+    pub fn opened(&mut self, path: &Path) {
+        self.recent.retain(|p| p != path);
+        self.recent.insert(0, path.to_path_buf());
+        self.recent.truncate(RECENT);
+        self.last_file = Some(path.to_path_buf());
+    }
+}
+
+/// Show a file (selected) or a folder in the system's file manager.
+pub fn reveal(path: &Path) -> Result<(), String> {
+    use std::process::Command;
+    let result = if cfg!(target_os = "windows") {
+        if path.is_dir() {
+            Command::new("explorer").arg(path).spawn()
+        } else {
+            Command::new("explorer")
+                .arg(format!("/select,{}", path.display()))
+                .spawn()
+        }
+    } else if cfg!(target_os = "macos") {
+        if path.is_dir() {
+            Command::new("open").arg(path).spawn()
+        } else {
+            Command::new("open").arg("-R").arg(path).spawn()
+        }
+    } else {
+        let dir = if path.is_dir() {
+            path
+        } else {
+            path.parent().unwrap_or(path)
+        };
+        Command::new("xdg-open").arg(dir).spawn()
+    };
+    result.map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Where new puzzles are kept until moved with Save as: a Setter folder in
+/// the user's documents. Tests get a scratch folder.
+pub fn library_dir() -> PathBuf {
+    if cfg!(test) {
+        return scratch_dir(&format!("library-{}", std::process::id()));
+    }
+    let d = dirs::document_dir()
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(std::env::temp_dir))
+        .join("Setter");
+    let _ = fs::create_dir_all(&d);
+    d
+}
+
+/// A file in `dir` for a new puzzle called `title` that doesn't overwrite
+/// anything: "Prize 12.xword", or "Prize 12 2.xword" if that's taken.
+pub fn new_file_in(dir: &Path, title: &str) -> PathBuf {
+    let stem = crate::export::file_stem(if title.trim().is_empty() {
+        "Untitled"
+    } else {
+        title
+    });
+    let mut path = dir.join(format!("{stem}.xword"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{stem} {n}.xword"));
+        n += 1;
+    }
+    path
 }
 
 /// A `<head>` script applying a saved Light/Dark theme before the first paint
@@ -425,5 +500,30 @@ mod tests {
             d.display()
         );
         assert!(!d.ends_with("setter"));
+    }
+
+    #[test]
+    fn new_puzzles_get_a_free_file_name() {
+        let d = temp_dir("library");
+        assert_eq!(new_file_in(&d, "Prize 12"), d.join("Prize 12.xword"));
+        fs::write(d.join("Prize 12.xword"), "x").unwrap();
+        assert_eq!(new_file_in(&d, "Prize 12"), d.join("Prize 12 2.xword"));
+        assert_eq!(new_file_in(&d, " "), d.join("Untitled.xword"));
+    }
+
+    #[test]
+    fn recent_puzzles_go_to_the_top_once_and_are_capped() {
+        let mut s = Settings::default();
+        for i in 0..10 {
+            s.opened(Path::new(&format!("/p/{i}.xword")));
+        }
+        s.opened(Path::new("/p/5.xword"));
+        assert_eq!(s.recent.len(), RECENT);
+        assert_eq!(s.recent[0], PathBuf::from("/p/5.xword"));
+        assert_eq!(
+            s.recent.iter().filter(|p| p.ends_with("5.xword")).count(),
+            1
+        );
+        assert_eq!(s.last_file, Some(PathBuf::from("/p/5.xword")));
     }
 }
