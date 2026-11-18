@@ -52,12 +52,13 @@ pub fn CommandPalette(
     on_close: EventHandler<()>,
 ) -> Element {
     let total: usize = groups.iter().map(|g| g.items.len()).sum();
-    use_effect(move || {
+    // Keep the highlighted item in view as it moves.
+    use_effect(use_reactive!(|active| {
         let _ = active;
         document::eval(
             "document.querySelector('.palette__item[aria-selected=\"true\"]')?.scrollIntoView({ block: 'nearest' })",
         );
-    });
+    }));
     let mut n = 0usize;
     let numbered: Vec<(String, Vec<(usize, PaletteItem)>)> = groups
         .into_iter()

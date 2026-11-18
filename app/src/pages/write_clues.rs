@@ -22,11 +22,11 @@ use xw_engine::bank::DeviceKind;
 #[component]
 pub fn WriteClues() -> Element {
     let state = use_context::<AppState>();
-    if (state.answer)().is_none() {
+    let Some(answer) = (state.answer)() else {
         return rsx! {
             EmptyState { message: "This puzzle has no answers." }
         };
-    }
+    };
     rsx! {
         div { class: "shell__body write-clues-body",
             aside { class: "write-clues__rail",
@@ -36,7 +36,10 @@ pub fn WriteClues() -> Element {
             main { class: "shell__main write-clues",
                 Head {}
                 Clue {}
-                Bank {}
+                // Keyed, so a new answer starts with the filter cleared.
+                for light in [answer.light_id] {
+                    Bank { key: "{light}" }
+                }
             }
         }
     }
@@ -265,13 +268,6 @@ fn Clue() -> Element {
 fn Bank() -> Element {
     let state = use_context::<AppState>();
     let mut filter = use_signal(String::new);
-    // A new answer starts with the filter cleared.
-    let light = state.answer.read().as_ref().map(|a| a.light_id.clone());
-    let mut seen = use_signal(|| light.clone());
-    if *seen.peek() != light {
-        seen.set(light);
-        filter.set(String::new());
-    }
     let Some(answer) = (state.answer)() else {
         return rsx! {};
     };

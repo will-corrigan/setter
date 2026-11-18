@@ -82,6 +82,7 @@ fn with_grid<R>(state: AppState, read: impl FnOnce(&Grid) -> R) -> Option<R> {
 fn free(state: AppState) -> bool {
     *state.mode.peek() == Mode::BuildGrid
         && !*state.credits.peek()
+        && !*state.home.peek()
         && !*state.filling.peek()
         && !*state.build.working.peek()
         && !*state.build.picker_open.peek()
@@ -140,14 +141,25 @@ pub fn toggle_words(state: AppState) {
 
 // ---------- editing ----------
 
+/// Can undo and redo act now? On either page, but not while a fill runs,
+/// behind the template picker, or with Home or the credits showing.
+fn can_travel(state: AppState) -> bool {
+    !*state.credits.peek()
+        && !*state.home.peek()
+        && !*state.filling.peek()
+        && !*state.build.working.peek()
+        && !*state.build.picker_open.peek()
+        && state.puzzle.peek().is_some()
+}
+
 pub fn undo(state: AppState) {
-    if free(state) {
+    if can_travel(state) {
         state.undo();
     }
 }
 
 pub fn redo(state: AppState) {
-    if free(state) {
+    if can_travel(state) {
         state.redo();
     }
 }
@@ -313,6 +325,7 @@ async fn run_fill(
     let Some(puzzle) = state.puzzle.peek().clone() else {
         return false;
     };
+    let shown = *state.shown_count.peek();
     let stop = Arc::new(AtomicBool::new(false));
     state.build.stop.set(stop.clone());
     state.build.working.set(true);
@@ -335,6 +348,10 @@ async fn run_fill(
     // Before the guard goes: it raises the flag too.
     let stopped = stop.load(Ordering::Relaxed);
     drop(busy);
+    if *state.shown_count.peek() != shown {
+        // Another puzzle is on screen now: this fill was for the old one.
+        return false;
+    }
     match done {
         Ok(Ok((filled, rare))) => {
             take_fill(state, &filled);
@@ -435,6 +452,8 @@ fn add_word(mut state: AppState, light_id: &str) {
 fn start_on(state: AppState, template: usize) {
     if let Some(t) = TEMPLATES.get(template) {
         state.show(state.signed(grid_fill::new_puzzle(t.rows)), None);
+        // A new grid is filled before it is clued, wherever it was started.
+        state.set_mode(Mode::BuildGrid);
         focus_grid();
     }
 }

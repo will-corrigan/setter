@@ -118,12 +118,18 @@ fn run_dev_script() {
 
 async fn fill_sample(mut state: AppState) {
     state.filling.set(true);
-    match tokio::task::spawn_blocking(|| {
+    let shown = *state.shown_count.peek();
+    let made = tokio::task::spawn_blocking(|| {
         let engine = state::engine();
         files::sample_puzzle(&engine.lex, engine.fill(), &engine.quality)
     })
-    .await
-    {
+    .await;
+    if *state.shown_count.peek() != shown {
+        // Something else was opened meanwhile: it stays.
+        state.filling.set(false);
+        return;
+    }
+    match made {
         Ok(Ok(puzzle)) => state.show(state.signed(puzzle), None),
         Ok(Err(why)) => state.notice.set(Some(why)),
         Err(_) => state
@@ -142,7 +148,7 @@ fn remember(mut state: AppState, path: &Path) {
 /// Open a puzzle from a file, after saving the one on screen.
 async fn open_file(state: AppState, path: PathBuf) {
     let mut notice = state.notice;
-    if let Err(e) = save_now(state) {
+    if let Err(e) = save_or_keep(state) {
         notice.set(Some(e));
         return;
     }
@@ -188,6 +194,18 @@ pub fn save_now(state: AppState) -> Result<(), String> {
     Ok(())
 }
 
+/// Save, or if the puzzle's file can't be written, keep a recovery copy
+/// that is offered at next start, and say how to get out.
+pub fn save_or_keep(state: AppState) -> Result<(), String> {
+    save_now(state).map_err(|e| {
+        if let Some(p) = state.puzzle.peek().as_ref() {
+            let path = state.path.peek().clone();
+            let _ = autosave::write_autosave_in(&files::config_dir(), p, path.as_deref());
+        }
+        format!("{e}. Use Save as to keep it somewhere else.")
+    })
+}
+
 /// Open a puzzle chosen on Home.
 pub fn open_path(state: AppState, path: PathBuf) {
     spawn(async move { open_file(state, path).await });
@@ -200,7 +218,7 @@ pub fn open_from_home(state: AppState) {
 
 /// Show Home, after saving the puzzle on screen.
 pub fn go_home(mut state: AppState) {
-    if let Err(e) = save_now(state) {
+    if let Err(e) = save_or_keep(state) {
         state.notice.set(Some(e));
         return;
     }
@@ -234,9 +252,28 @@ async fn save_as(state: AppState) {
         Ok(()) => {
             state.saved_to(path.clone(), puzzle);
             remember(state, &path);
+            // A file Setter named itself in its own folder moves with Save as,
+            // so Home doesn't list a stale copy.
+            if let Some(old) = known.filter(|old| moves_with_save_as(old, &path)) {
+                let _ = std::fs::remove_file(old);
+            }
         }
         Err(e) => notice.set(Some(e)),
     }
+}
+
+/// Is `old` a file in the Setter folder, left behind by saving as `new`?
+fn moves_with_save_as(old: &Path, new: &Path) -> bool {
+    let same = |a: &Path, b: &Path| {
+        std::fs::canonicalize(a)
+            .ok()
+            .zip(std::fs::canonicalize(b).ok())
+            .is_some_and(|(a, b)| a == b)
+    };
+    !same(old, new)
+        && old
+            .parent()
+            .is_some_and(|dir| same(dir, &files::library_dir()))
 }
 
 /// Show the puzzle's file in the system's file manager.
@@ -313,6 +350,9 @@ fn use_bank_loader(state: AppState) {
 
 /// Step to the answer before or after, on whichever page is showing.
 fn step_answer(state: AppState, delta: i32) {
+    if *state.home.peek() || *state.credits.peek() {
+        return;
+    }
     if *state.mode.peek() == Mode::BuildGrid {
         let key = if delta < 0 {
             GridKey::PreviousAnswer
@@ -338,7 +378,7 @@ fn use_shortcuts(state: AppState) {
                     Some(Shortcut::PreviousAnswer) => step_answer(state, -1),
                     Some(Shortcut::NextAnswer) => step_answer(state, 1),
                     Some(Shortcut::Save) => {
-                        if let Err(e) = save_now(state) {
+                        if let Err(e) = save_or_keep(state) {
                             let mut notice = state.notice;
                             notice.set(Some(e));
                         }
@@ -377,9 +417,9 @@ fn use_autosave(state: AppState) {
             autosave::Step::Remove => autosave::remove_autosave(),
             autosave::Step::Write => pending.set(Some(spawn(async move {
                 tokio::time::sleep(AUTOSAVE_AFTER).await;
-                if let Err(e) = save_now(state) {
+                if let Err(e) = save_or_keep(state) {
                     let mut notice = state.notice;
-                    notice.set(Some(format!("Couldn't save: {e}")));
+                    notice.set(Some(e));
                 }
             }))),
         }
@@ -388,7 +428,7 @@ fn use_autosave(state: AppState) {
 
 /// Save straight away if anything has changed, e.g. as the window closes.
 pub fn write_autosave_now(state: AppState) -> Result<(), String> {
-    save_now(state)
+    save_or_keep(state)
 }
 
 fn use_theme(state: AppState) {
@@ -434,7 +474,7 @@ pub fn Shell() -> Element {
 /// Start a new, empty puzzle: choose its grid on Build grid. The puzzle on
 /// screen is saved first.
 fn new_puzzle(mut state: AppState) {
-    if let Err(e) = save_now(state) {
+    if let Err(e) = save_or_keep(state) {
         state.notice.set(Some(e));
         return;
     }
@@ -443,7 +483,7 @@ fn new_puzzle(mut state: AppState) {
 }
 
 async fn new_sample(mut state: AppState) {
-    if let Err(e) = save_now(state) {
+    if let Err(e) = save_or_keep(state) {
         state.notice.set(Some(e));
         return;
     }
@@ -947,6 +987,40 @@ mod tests {
             page.contains(r#"class="topbar__logo topbar__logo--button""#),
             "{page}"
         );
+    }
+
+    #[test]
+    fn undo_works_on_write_clues_but_not_behind_home() {
+        let said = |home: bool| {
+            crate::ds::test_render(move || {
+                let mut state = use_app_state(Settings::default);
+                use_hook(|| {
+                    state.show(puzzle(), None);
+                    state.set_mode(Mode::WriteClues);
+                    state.set_clue_text("Gold".into());
+                    state.home.set(home);
+                    build_grid::undo(state);
+                });
+                let text = state.clue_text();
+                rsx! { "[{text}]" }
+            })
+        };
+        assert_eq!(said(false), "[]");
+        assert_eq!(said(true), "[Gold]");
+    }
+
+    #[test]
+    fn save_as_moves_only_files_in_the_setter_folder() {
+        let lib = files::library_dir();
+        let own = lib.join("Moved.xword");
+        std::fs::write(&own, "{}").unwrap();
+        let elsewhere = files::scratch_dir(&format!("save-as-{}", std::process::id()));
+        let kept = elsewhere.join("Kept.xword");
+        std::fs::write(&kept, "{}").unwrap();
+        let to = elsewhere.join("New.xword");
+        assert!(moves_with_save_as(&own, &to));
+        assert!(!moves_with_save_as(&kept, &to), "files elsewhere stay");
+        assert!(!moves_with_save_as(&own, &own), "saving over itself");
     }
 
     #[test]

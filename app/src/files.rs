@@ -215,15 +215,28 @@ impl Settings {
 }
 
 /// Show a file (selected) or a folder in the system's file manager.
+/// `explorer /select,"<path>"`: passed raw, since explorer ignores a
+/// `/select,` that Rust's quoting has wrapped in quotes with the path.
+#[cfg(windows)]
+fn select_in_explorer(path: &Path) -> std::io::Result<std::process::Child> {
+    use std::os::windows::process::CommandExt;
+    std::process::Command::new("explorer")
+        .raw_arg(format!("/select,\"{}\"", path.display()))
+        .spawn()
+}
+
+#[cfg(not(windows))]
+fn select_in_explorer(path: &Path) -> std::io::Result<std::process::Child> {
+    std::process::Command::new("explorer").arg(path).spawn()
+}
+
 pub fn reveal(path: &Path) -> Result<(), String> {
     use std::process::Command;
     let result = if cfg!(target_os = "windows") {
         if path.is_dir() {
             Command::new("explorer").arg(path).spawn()
         } else {
-            Command::new("explorer")
-                .arg(format!("/select,{}", path.display()))
-                .spawn()
+            select_in_explorer(path)
         }
     } else if cfg!(target_os = "macos") {
         if path.is_dir() {
@@ -263,12 +276,24 @@ pub fn library_dir() -> PathBuf {
 
 /// A file in `dir` for a new puzzle called `title` that doesn't overwrite
 /// anything: "Prize 12.xword", or "Prize 12 2.xword" if that's taken.
+/// Names Windows keeps for devices: a file can't be called "con.xword".
+fn reserved_on_windows(stem: &str) -> bool {
+    let s = stem.trim().to_ascii_uppercase();
+    matches!(s.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((s.starts_with("COM") || s.starts_with("LPT"))
+            && s.len() == 4
+            && s.as_bytes()[3].is_ascii_digit())
+}
+
 pub fn new_file_in(dir: &Path, title: &str) -> PathBuf {
-    let stem = crate::export::file_stem(if title.trim().is_empty() {
+    let mut stem = crate::export::file_stem(if title.trim().is_empty() {
         "Untitled"
     } else {
         title
     });
+    if reserved_on_windows(&stem) {
+        stem.push_str(" puzzle");
+    }
     let mut path = dir.join(format!("{stem}.xword"));
     let mut n = 2;
     while path.exists() {
@@ -531,5 +556,17 @@ mod tests {
             1
         );
         assert_eq!(s.last_file, Some(PathBuf::from("/p/5.xword")));
+    }
+
+    #[test]
+    fn names_windows_keeps_for_devices_are_avoided() {
+        let dir = scratch_dir(&format!("reserved-{}", std::process::id()));
+        for title in ["Con", "aux", "COM1", "lpt9"] {
+            let name = new_file_in(&dir, title);
+            let stem = name.file_stem().unwrap().to_string_lossy().into_owned();
+            assert!(stem.ends_with(" puzzle"), "{title}: {stem}");
+        }
+        let fine = new_file_in(&dir, "Console");
+        assert_eq!(fine.file_stem().unwrap(), "Console");
     }
 }

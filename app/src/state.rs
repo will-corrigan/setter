@@ -421,6 +421,10 @@ pub struct Snap {
     selection: Selection,
     cursor: Cursor,
     mode: Mode,
+    /// Explanations written by picks, so they keep following picks after undo.
+    auto_notes: HashMap<String, String>,
+    /// Where the definition goes, so undoing the switch flips it back.
+    definition_last: bool,
 }
 
 /// What the word bank has for the selection on screen.
@@ -512,6 +516,9 @@ pub struct AppState {
     pub home: Signal<bool>,
     /// The command palette is open.
     pub palette_open: Signal<bool>,
+    /// How many puzzles have been shown: work started for one puzzle checks
+    /// it is still on screen before it lands.
+    pub shown_count: Signal<u64>,
     /// There is a puzzle to show, and no new one on its way.
     pub ready: Memo<bool>,
     /// The answer on screen.
@@ -613,6 +620,7 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         credits: use_signal(|| false),
         home: use_signal(|| false),
         palette_open: use_signal(|| false),
+        shown_count: use_signal(|| 0),
         ready,
         answer,
         clued,
@@ -627,6 +635,15 @@ impl AppState {
     /// Show a puzzle, starting at its first answer, as the clean copy: it
     /// matches the file at `path`, or is new.
     pub fn show(mut self, puzzle: Puzzle, path: Option<PathBuf>) {
+        // A fill still running was for the puzzle going away: stop it, and
+        // let its result know it is too late.
+        self.build
+            .stop
+            .peek()
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        *self.shown_count.write() += 1;
+        // A sample still being made is no longer wanted either.
+        self.filling.set(false);
         let first = answers::answers(&puzzle)
             .first()
             .map(|a| a.light_id.clone())
@@ -746,6 +763,8 @@ impl AppState {
             selection: self.selection.peek().clone(),
             cursor: *self.build.cursor.peek(),
             mode: *self.mode.peek(),
+            auto_notes: self.auto_notes.peek().clone(),
+            definition_last: self.settings.peek().definition_last,
         })
     }
 
@@ -787,6 +806,11 @@ impl AppState {
         self.picks.set(snap.picks);
         self.selection.set(snap.selection);
         self.build.cursor.set(snap.cursor);
+        self.auto_notes.set(snap.auto_notes);
+        if self.settings.peek().definition_last != snap.definition_last {
+            self.settings.write().definition_last = snap.definition_last;
+            files::save_settings(&self.settings.peek());
+        }
         if *self.mode.peek() != snap.mode {
             self.build.words_open.set(false);
             self.mode.set(snap.mode);
@@ -804,7 +828,10 @@ impl AppState {
         if let Some(c) = cursor {
             self.build.cursor.set(c);
         }
-        self.selection.set(Selection::at(light));
+        // Already there: keep the device and option chosen for it.
+        if self.selection.peek().light != light {
+            self.selection.set(Selection::at(light));
+        }
     }
 
     /// Go to the next answer with no clue yet (stays put if all have one).
@@ -1774,6 +1801,63 @@ mod tests {
             state.toggle_pick(pick_key("0,0,a", DeviceKind::Charade, 0, 0), "gold");
         });
         assert_eq!(note, "From the file");
+    }
+
+    #[test]
+    fn after_undo_the_explanation_still_follows_the_picks() {
+        let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
+        let note = with_charade(move |state| {
+            state.toggle_pick(key(0), "gold");
+            state.toggle_pick(key(1), "box");
+            state.undo();
+            state.toggle_pick(key(2), "band");
+        });
+        assert!(
+            note.contains("BAND") || note.to_lowercase().contains("band"),
+            "{note}"
+        );
+    }
+
+    #[test]
+    fn undoing_the_definition_switch_flips_it_back() {
+        let key = |c| pick_key("0,0,a", DeviceKind::Charade, 0, c);
+        let text = clue_after(move |state| {
+            state.toggle_pick(key(0), "gold");
+            state.toggle_pick(key(2), "band");
+            let before = state.clue_text();
+            state.set_definition_last(true);
+            assert_ne!(state.clue_text(), before);
+            state.undo();
+            assert!(!state.settings.peek().definition_last);
+            assert_eq!(state.clue_text(), before);
+        });
+        assert!(text.starts_with("Band"), "{text}");
+    }
+
+    #[test]
+    fn going_to_the_answer_already_on_screen_keeps_its_device() {
+        let said = after(
+            |mut state| {
+                let anagram = state.selection.peek().with_device(DeviceKind::Anagram);
+                state.selection.set(anagram);
+                state.go_to("0,0,a");
+            },
+            |state| format!("{:?}", state.selection.read().device),
+        );
+        assert_eq!(said, "Some(Anagram)");
+    }
+
+    #[test]
+    fn showing_a_puzzle_stops_a_fill_and_counts_the_change() {
+        let said = after(
+            |state| {
+                let flag = state.build.stop.peek().clone();
+                state.show(puzzle(), None);
+                assert!(flag.load(std::sync::atomic::Ordering::Relaxed));
+            },
+            |state| format!("{}", state.shown_count.read()),
+        );
+        assert_eq!(said, "2");
     }
 
     #[test]
