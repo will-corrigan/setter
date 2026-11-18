@@ -67,6 +67,7 @@ names the everyday commands.
 ```bash
 mise install                      # Rust 1.99.1 and dx 0.7.10
 mise bootstrap packages apply     # Linux only: WebKitGTK etc. via apt, dnf, pacman or zypper
+hk install                        # git hooks: commit messages and formatting (hk.pkl)
 mise run app                      # run Setter with live reload
 mise run test                     # every test
 mise run lint                     # rustfmt and clippy
@@ -92,6 +93,11 @@ Outside it, WebKitGTK can't find its schemas and renders a broken page.
 OS: `.msi`/`.exe` on Windows, `.app`/`.dmg` on macOS, `.deb`/`.AppImage` on Linux. They
 land under `target/dx/setter/bundle/`. An unsigned Mac app needs right-click → Open the
 first time.
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org)
+(`feat:`, `fix:`, `chore:` …): the commit-msg hook checks them, and so does GitHub for
+`main`, which only takes changes through pull requests (squash merged, so the PR
+title becomes the commit message).
 
 Releases are run by [release-plz](https://release-plz.dev) (`release-plz.toml`). Each push
 to main updates a Release PR with the next version, worked out from commit messages

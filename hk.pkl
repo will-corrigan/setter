@@ -1,0 +1,24 @@
+// Git hooks, run by hk (https://hk.jdx.dev; mise installs it). Set up once per
+// clone with `hk install`.
+//
+// commit-msg: messages follow Conventional Commits (feat:, fix:, chore: …), which
+// release-plz reads to choose the next version. A ruleset on GitHub enforces the
+// same for main, so this just catches it before the push.
+// pre-commit: Rust code is formatted.
+amends "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Builtins.pkl"
+
+hooks {
+  ["commit-msg"] {
+    steps {
+      ["conventional-commit"] = Builtins.check_conventional_commit
+    }
+  }
+  ["pre-commit"] {
+    fix = true
+    stage = true
+    steps {
+      ["cargo-fmt"] = Builtins.cargo_fmt
+    }
+  }
+}

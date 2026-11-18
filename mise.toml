@@ -11,6 +11,9 @@
 rust = { version = "1.99.1", components = "clippy,rustfmt,rust-analyzer,rust-src" }
 # dx, the Dioxus CLI: prebuilt for Linux, macOS and Windows.
 "github:DioxusLabs/dioxus" = { version = "0.7.10", bin = "dx" }
+# Git hooks (hk.pkl): `hk install` once per clone. pkl reads hk's config.
+hk = "2.13.0"
+pkl = "0.33.0"
 
 # WebKitGTK and friends, for building on Linux. Each line installs with whichever
 # of these package managers the machine has; the others are skipped.
