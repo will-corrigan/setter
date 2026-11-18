@@ -156,12 +156,14 @@ pub fn load_engine_data_from(dir: &Path) -> EngineData {
             warnings.push(format!("indicators.toml: {e}"));
         }
     }
+    let mut th = Thesaurus::bundled();
+    th.add_own(&crate::user_lists::definition_pairs(dir));
     EngineData {
         lex,
         abbr,
         ind,
         quality,
-        th: Thesaurus::bundled(),
+        th,
         warnings,
     }
 }

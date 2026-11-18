@@ -11,6 +11,8 @@ pub(super) fn build_one(
     th: &Thesaurus,
     kind: DeviceKind,
     key: &str,
+    // The answer as words ("way in"); `key` is its letters ("wayin").
+    phrase: &str,
 ) -> DeviceView {
     let (count, options) = match kind {
         DeviceKind::AlternateLetters => alternate_letters(ctx, ind, th, key),
@@ -24,10 +26,21 @@ pub(super) fn build_one(
         DeviceKind::Reversal => reversal(ctx, ind, th, key),
         DeviceKind::SoundsLike => sounds_like(ctx, ind, th, key),
         DeviceKind::Spoonerism => spoonerism(ctx, ind, th, key),
-        DeviceKind::CrypticDefinition => cryptic_definition(ctx, th, key),
-        DeviceKind::DoubleDefinition => double_definition(ctx, th, key),
+        DeviceKind::CrypticDefinition => cryptic_definition(ctx, th, key, phrase),
+        DeviceKind::DoubleDefinition => double_definition(ctx, th, key, phrase),
     };
     let mut options = options;
+    // Meanings are looked up for the words, which a phrase's letters
+    // ("wayin") would miss.
+    if phrase != key {
+        for option in &mut options {
+            for column in &mut option.columns {
+                if column.tone == Tone::Definition {
+                    column.groups = th.meanings(phrase, 80);
+                }
+            }
+        }
+    }
     options.truncate(MAX_OPTIONS);
     options.retain(|o| allowed(ctx, &o.label) && allowed(ctx, &o.reads_as));
     for option in &mut options {
@@ -784,8 +797,8 @@ fn spoonerism(ctx: Ctx, ind: &Indicators, th: &Thesaurus, key: &str) -> Built {
     (found.len(), options)
 }
 
-fn cryptic_definition(ctx: Ctx, th: &Thesaurus, key: &str) -> Built {
-    let linked = th.linked(key, 80);
+fn cryptic_definition(ctx: Ctx, th: &Thesaurus, key: &str, phrase: &str) -> Built {
+    let linked = th.linked(phrase, 80);
     if !ctx.lex.contains(key) || linked.is_empty() {
         return (0, vec![]);
     }
@@ -808,9 +821,9 @@ fn cryptic_definition(ctx: Ctx, th: &Thesaurus, key: &str) -> Built {
 /// Most senses shown for a double definition.
 const MAX_SENSES: usize = 6;
 
-fn double_definition(ctx: Ctx, th: &Thesaurus, key: &str) -> Built {
+fn double_definition(ctx: Ctx, th: &Thesaurus, key: &str, phrase: &str) -> Built {
     let senses: Vec<_> = th
-        .senses(key, MAX_SENSES * 2)
+        .senses(phrase, MAX_SENSES * 2)
         .into_iter()
         .filter(|s| !s.words.is_empty())
         .take(MAX_SENSES)

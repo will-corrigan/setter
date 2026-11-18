@@ -70,8 +70,12 @@ pub fn WordColumn(
     /// A filter shared by every column; the column then has no box of its own.
     #[props(default)]
     filter: Option<String>,
+    /// Offer a box to add a word of the setter's own (a definition).
+    #[props(default)]
+    on_add: Option<EventHandler<String>>,
 ) -> Element {
     let mut query = use_signal(String::new);
+    let mut own = use_signal(String::new);
     let shared = filter.is_some();
     let typed = filter.unwrap_or_else(|| query.read().clone());
     let groups = filter_groups(&column.groups, &typed);
@@ -101,6 +105,26 @@ pub fn WordColumn(
                     "aria-label": "Filter {column.title}",
                     value: "{query}",
                     oninput: move |e| query.set(e.value()),
+                }
+            }
+            if let Some(on_add) = on_add {
+                form {
+                    class: "word-column__add",
+                    onsubmit: move |e: FormEvent| {
+                        e.prevent_default();
+                        let text = own.peek().trim().to_string();
+                        if !text.is_empty() {
+                            on_add.call(text);
+                            own.set(String::new());
+                        }
+                    },
+                    input {
+                        class: "word-column__own",
+                        placeholder: "Add your own…",
+                        "aria-label": "Add your own {column.title.to_lowercase()}",
+                        value: "{own}",
+                        oninput: move |e| own.set(e.value()),
+                    }
                 }
             }
             div { class: "word-column__list", role: "listbox", "aria-label": "{column.title}",

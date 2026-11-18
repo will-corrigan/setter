@@ -20,15 +20,17 @@ use std::time::SystemTime;
 pub enum Section {
     General,
     WordLists,
+    Definitions,
     Abbreviations,
     Indicators,
     Shortcuts,
 }
 
 impl Section {
-    pub const ALL: [Section; 5] = [
+    pub const ALL: [Section; 6] = [
         Section::General,
         Section::WordLists,
+        Section::Definitions,
         Section::Abbreviations,
         Section::Indicators,
         Section::Shortcuts,
@@ -38,6 +40,7 @@ impl Section {
         match self {
             Section::General => "general",
             Section::WordLists => "words",
+            Section::Definitions => "definitions",
             Section::Abbreviations => "abbreviations",
             Section::Indicators => "indicators",
             Section::Shortcuts => "shortcuts",
@@ -48,6 +51,7 @@ impl Section {
         match self {
             Section::General => "General",
             Section::WordLists => "Word lists",
+            Section::Definitions => "Definitions",
             Section::Abbreviations => "Abbreviations",
             Section::Indicators => "Indicators",
             Section::Shortcuts => "Keyboard shortcuts",
@@ -59,6 +63,7 @@ impl Section {
         match self {
             Section::General => "general setter name author theme dark light system appearance definition start end puzzles folder documents save",
             Section::WordLists => "word lists words phrases own dictionary never suggest banned block import export",
+            Section::Definitions => "definitions definition meaning means answer phrase synonym own thesaurus",
             Section::Abbreviations => "abbreviations letters stand for meanings",
             Section::Indicators => "indicators anagram reversal container hidden homophone sounds deletion charade spoonerism",
             Section::Shortcuts => "keyboard shortcuts keys ctrl cmd command hotkeys",
@@ -181,7 +186,7 @@ pub fn added(when: Option<SystemTime>, now: SystemTime) -> String {
 
 /// The lists changed: load the words again so they count everywhere, and
 /// let word banks be built afresh.
-fn lists_changed(mut state: AppState) {
+pub fn lists_changed(mut state: AppState) {
     *state.build.reloads.write() += 1;
     dioxus::core::spawn_forever(async move {
         let _ = tokio::task::spawn_blocking(state::reload_engine).await;
@@ -238,6 +243,7 @@ pub fn Settings(section: Section) -> Element {
     let words = user_lists::read(&dir, WordList::Yours).len()
         + user_lists::read(&dir, WordList::Never).len();
     let abbrevs = user_lists::abbreviations(&dir).len();
+    let defs = user_lists::definitions(&dir).len();
     let indicators: usize = user_lists::indicators(&dir).values().map(Vec::len).sum();
     let shown = matching(&query());
     let items: Vec<SettingsNavItem> = shown
@@ -247,6 +253,7 @@ pub fn Settings(section: Section) -> Element {
             label: s.label().into(),
             count: match s {
                 Section::WordLists => Some(words),
+                Section::Definitions => Some(defs),
                 Section::Abbreviations => Some(abbrevs),
                 Section::Indicators => Some(indicators),
                 _ => None,
@@ -276,6 +283,7 @@ pub fn Settings(section: Section) -> Element {
                 match section {
                     Section::General => rsx! { General {} },
                     Section::WordLists => rsx! { WordLists {} },
+                    Section::Definitions => rsx! { Definitions {} },
                     Section::Abbreviations => rsx! { Abbreviations {} },
                     Section::Indicators => rsx! { Indicators {} },
                     Section::Shortcuts => rsx! { Shortcuts {} },
@@ -434,6 +442,37 @@ fn WordLists() -> Element {
                             state.notice.set(Some(format!("Couldn't export the list: {e}")));
                         }
                     });
+                },
+            }
+        }
+    }
+}
+
+/// The setter's own definitions: shown first in an answer's Definition
+/// column, and the other way round for the definition itself.
+#[component]
+fn Definitions() -> Element {
+    let state = use_context::<AppState>();
+    let _ = (state.build.reloads)();
+    let rows: Vec<ListRow> = user_lists::definitions(&files::config_dir())
+        .into_iter()
+        .map(|(answer, defs)| ListRow {
+            text: answer.to_uppercase(),
+            detail: defs.join(", "),
+            when: String::new(),
+        })
+        .collect();
+    rsx! {
+        SettingsPage { title: "Definitions",
+            ListEditor {
+                rows,
+                placeholder: "Answer",
+                second_placeholder: "What defines it, with commas".to_string(),
+                on_add: move |(answer, defs): (String, String)| {
+                    report(state, user_lists::set_definitions(&files::config_dir(), &answer, &defs));
+                },
+                on_remove: move |answer: String| {
+                    report(state, user_lists::set_definitions(&files::config_dir(), &answer, ""));
                 },
             }
         }
