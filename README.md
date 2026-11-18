@@ -93,9 +93,11 @@ OS: `.msi`/`.exe` on Windows, `.app`/`.dmg` on macOS, `.deb`/`.AppImage` on Linu
 land under `target/dx/setter/bundle/`. An unsigned Mac app needs right-click → Open the
 first time.
 
-Releases: run the **Release** workflow from the repo's Actions tab and choose the
-version bump. It builds the Windows installer, tags the version and publishes a
-GitHub Release with the `.exe` attached. Nothing runs on push.
+Releases are run by [release-plz](https://release-plz.dev) (`release-plz.toml`). Each push
+to main updates a Release PR with the next version, worked out from commit messages
+(`fix:` → patch, `feat:` → minor), and the changelog. Merging that PR tags `vX.Y.Z`,
+publishes the GitHub Release and builds the Windows installer (`.exe`) for it. To
+rebuild the installer for an existing release: Actions → Release → Run workflow.
 
 Regenerating the word data (`scripts/build_lexicon.py`, `scripts/build_thesaurus.py`)
 needs any Python 3; they use the standard library only.

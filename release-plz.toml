@@ -1,0 +1,31 @@
+# release-plz: versions and the changelog from commit messages (fix: → patch,
+# feat: → minor, a "!" or BREAKING CHANGE → major). Each push to main updates a
+# Release PR; merging it tags vX.Y.Z and makes the GitHub Release, and the
+# Release workflow then builds the Windows installer for it. Nothing is
+# published to crates.io: versions come from the git tags.
+
+[workspace]
+git_only = true
+# Release only when the Release PR is merged, never on an ordinary push.
+release_always = false
+# An app, not a library: no API compatibility checks.
+semver_check = false
+# One tag, one release and one changelog, all for the app (below).
+git_tag_enable = false
+git_release_enable = false
+changelog_update = false
+
+[[package]]
+name = "setter"
+git_tag_name = "v{{ version }}"
+git_tag_enable = true
+git_release_enable = true
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+# The engine is part of the app: its changes go in the app's changelog.
+changelog_include = ["xw-engine"]
+
+[[package]]
+name = "xw-engine"
+# Shares the app's version (workspace.package), so it reads the app's tags.
+git_tag_name = "v{{ version }}"
