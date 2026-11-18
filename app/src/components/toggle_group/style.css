@@ -1,10 +1,33 @@
 /* Official Dioxus ToggleGroup, restyled with Setter tokens (copied in via dx components). */
+/* Segmented: equal slots, and one bubble that slides to the chosen one with
+   a little overshoot. Segmented sets --count and --at on the group. */
 .dx-toggle-group[data-variant="segmented"] {
-  display: inline-flex;
+  --count: 2;
+  --at: 0;
+  position: relative;
+  isolation: isolate;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   width: fit-content;
   padding: 3px;
   border-radius: var(--radius-m);
   background: var(--canvas);
+}
+
+.dx-toggle-group[data-variant="segmented"]::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--count));
+  border-radius: var(--radius-s);
+  background: var(--raised);
+  box-shadow: var(--shadow-1);
+  transform: translateX(calc(var(--at) * 100%));
+  transition: transform calc(var(--dur) * 2) cubic-bezier(0.34, 1.45, 0.5, 1);
 }
 
 .dx-toggle-group[data-variant="pills"] {
@@ -32,9 +55,7 @@
 }
 
 [data-variant="segmented"] > .dx-toggle-item[data-state="on"] {
-  background: var(--raised);
   color: var(--text);
-  box-shadow: var(--shadow-1);
 }
 
 [data-variant="pills"] > .dx-toggle-item {

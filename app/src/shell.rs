@@ -117,7 +117,9 @@ pub fn use_startup(state: AppState) {
 /// sent to WSLg windows, so screenshots of a worked clue are driven this way
 /// (clicks and typing as DOM events). See `scripts/dev/`.
 fn dev_script_set() -> bool {
-    cfg!(debug_assertions) && std::env::var_os("SETTER_DEV_SCRIPT").is_some()
+    cfg!(debug_assertions)
+        && std::env::var_os("SETTER_DEV_SCRIPT").is_some()
+        && std::env::var_os("SETTER_DEV_HOME").is_none()
 }
 
 fn run_dev_script() {

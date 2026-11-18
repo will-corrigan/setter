@@ -216,6 +216,10 @@
   --grid-break: #1d2433;        /* word-break bars and hyphens */
   --grid-shadow: 0 1px 3px rgba(0,0,0,.25);
   --grid-cell: 32px;
+  --grid-cell-min: 32px;        /* Build grid's squares: never smaller… */
+  --grid-cell-max: 76px;        /* …nor bigger, however small the grid */
+  --build-chrome: 260px;        /* the height Build grid needs besides the grid */
+  --build-grid-share: 48vw;     /* the most of the window's width the grid takes */
   --grid-gap: 1px;
   --grid-frame: 2px;
   --grid-pitch: calc(var(--grid-cell) + var(--grid-gap)); /* one square and its line */
