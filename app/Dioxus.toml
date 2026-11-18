@@ -26,5 +26,11 @@ icon = [
 [bundle.windows]
 icon_path = "icons/icon.ico"
 
+# WebView2 ships with Windows 10 and 11, so embed only Microsoft's small
+# bootstrapper (~2 MB), which installs it on the rare machine without it.
+# dx's default embeds the whole offline runtime installer (~180 MB).
+[bundle.windows.webview_install_mode.EmbedBootstrapper]
+silent = true
+
 [bundle.windows.nsis]
 installer_icon = "icons/icon.ico"
