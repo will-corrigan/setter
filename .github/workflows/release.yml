@@ -200,9 +200,14 @@ jobs:
           echo "MAIN_EXE=$main" >> "$GITHUB_ENV"
           echo "$app"; ls -R "$app/Contents" | head -50
       # dx build names icon.icns in Info.plist but leaves the file out (only
-      # dx bundle copies it), so the app would show a blank icon.
+      # dx bundle copies it), so the app would show a blank icon. Adding a file
+      # breaks the app's ad-hoc signature, which macOS then calls "damaged",
+      # so it's signed again (ad hoc: no Apple certificate yet).
       - name: Put the icon in the app
-        run: cp app/icons/icon.icns "$APP/Contents/Resources/icon.icns"
+        run: |
+          cp app/icons/icon.icns "$APP/Contents/Resources/icon.icns"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
       # vpk is a .NET 10 tool; the runners' own .NET isn't always found.
       - uses: actions/setup-dotnet@v5
         with:
