@@ -93,6 +93,10 @@ OS: `.msi`/`.exe` on Windows, `.app`/`.dmg` on macOS, `.deb`/`.AppImage` on Linu
 land under `target/dx/setter/bundle/`. An unsigned Mac app needs right-click → Open the
 first time.
 
+Releases: run the **Release** workflow from the repo's Actions tab and choose the
+version bump. It builds the Windows installer, tags the version and publishes a
+GitHub Release with the `.exe` attached. Nothing runs on push.
+
 Regenerating the word data (`scripts/build_lexicon.py`, `scripts/build_thesaurus.py`)
 needs any Python 3; they use the standard library only.
 

@@ -1,0 +1,84 @@
+# A release, started by hand from the Actions tab (never on push): bump the
+# version, build the Windows installer (.exe), then tag the commit and publish
+# a GitHub Release with the installer attached. The tag and release only
+# happen if the build succeeds.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (none releases the current version)"
+        type: choice
+        options: [patch, minor, major, none]
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: jdx/mise-action@v4
+
+      - name: Work out the version
+        id: version
+        run: |
+          current=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          IFS=. read -r major minor patch <<< "$current"
+          case "${{ inputs.bump }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          next="$major.$minor.$patch"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$next" > /dev/null; then
+            echo "::error::v$next is already released"
+            exit 1
+          fi
+          echo "Releasing v$next (was $current)"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "changed=$([ "$next" != "$current" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Set the version
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          sed -i '/^\[workspace.package\]/,/^\[/s/^version = ".*"/version = "${{ steps.version.outputs.next }}"/' Cargo.toml
+          cargo update --workspace
+
+      - name: Test
+        run: cargo test --workspace --release
+
+      - name: Build the installer
+        working-directory: app
+        run: dx bundle --platform desktop --release --package-types nsis --out-dir ../dist
+
+      - name: Commit the version and tag it
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "${{ steps.version.outputs.changed }}" = true ]; then
+            git commit -am "release: v${{ steps.version.outputs.next }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+          git tag "v${{ steps.version.outputs.next }}"
+          git push origin "v${{ steps.version.outputs.next }}"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.next }}" dist/*.exe \
+            --title "Setter ${{ steps.version.outputs.next }}" \
+            --generate-notes \
+            --notes "Windows installer. It isn't signed yet, so Windows may warn before running it: choose More info, then Run anyway."
