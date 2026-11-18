@@ -354,6 +354,7 @@ pub enum Shortcut {
     Redo,
     /// Open or close the command palette.
     Palette,
+    Settings,
     NextUnclued,
     /// Open or close the words popover.
     Words,
@@ -369,7 +370,7 @@ impl Shortcut {
 
 /// (key, Alt held, Ctrl held, Shift held, action). The page's key listener
 /// and `shortcut` both read this table.
-pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 12] = [
+pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 13] = [
     ("arrowleft", true, false, false, Shortcut::PreviousAnswer),
     ("arrowright", true, false, false, Shortcut::NextAnswer),
     ("s", false, true, false, Shortcut::Save),
@@ -378,6 +379,7 @@ pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 12] = [
     ("o", false, true, false, Shortcut::Open),
     ("e", false, true, false, Shortcut::Export),
     ("k", false, true, false, Shortcut::Palette),
+    (",", false, true, false, Shortcut::Settings),
     ("j", false, true, false, Shortcut::NextUnclued),
     ("z", false, true, false, Shortcut::Undo),
     ("z", false, true, true, Shortcut::Redo),
@@ -537,8 +539,12 @@ pub struct AppState {
     pub home: Signal<bool>,
     /// The command palette is open.
     pub palette_open: Signal<bool>,
+    /// Settings is showing, at this section.
+    pub settings_page: Signal<Option<crate::pages::settings::Section>>,
     /// A newer version, downloaded and ready to install.
     pub update_ready: Signal<Option<String>>,
+    /// This installed copy has checked and is the newest version.
+    pub up_to_date: Signal<bool>,
     /// How many puzzles have been shown: work started for one puzzle checks
     /// it is still on screen before it lands.
     pub shown_count: Signal<u64>,
@@ -631,7 +637,9 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         credits: use_signal(|| false),
         home: use_signal(|| false),
         palette_open: use_signal(|| false),
+        settings_page: use_signal(|| None),
         update_ready: use_signal(|| None),
+        up_to_date: use_signal(|| false),
         shown_count: use_signal(|| 0),
         ready,
         answer,

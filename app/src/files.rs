@@ -57,7 +57,8 @@ fn read_lines(path: &Path) -> Vec<String> {
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .map(str::to_string)
+        // Settings may note when a word was added, after a tab.
+        .map(|l| l.split('\t').next().unwrap_or(l).trim().to_string())
         .collect()
 }
 
@@ -109,18 +110,13 @@ pub fn add_own_word(text: &str) -> Result<(), String> {
 }
 
 pub fn add_own_word_in(dir: &Path, text: &str) -> Result<(), String> {
-    let path = dir.join("words.txt");
-    let entry = text.trim().to_lowercase();
-    if entry.is_empty() || read_lines(&path).iter().any(|l| l.to_lowercase() == entry) {
-        return Ok(());
-    }
-    let mut contents = fs::read_to_string(&path).unwrap_or_default();
-    if !contents.is_empty() && !contents.ends_with('\n') {
-        contents.push('\n');
-    }
-    contents.push_str(&entry);
-    contents.push('\n');
-    fs::write(&path, contents).map_err(|e| format!("Couldn't add the word: {e}"))
+    crate::user_lists::add(
+        dir,
+        crate::user_lists::WordList::Yours,
+        &[text.to_string()],
+        std::time::SystemTime::now(),
+    )
+    .map(|_| ())
 }
 
 /// Everything the engine needs, with the user's own lists merged in.
@@ -198,6 +194,9 @@ pub struct Settings {
     /// Puzzles opened or saved lately, most recent first.
     #[serde(default)]
     pub recent: Vec<PathBuf>,
+    /// Where new puzzles are saved, if not Documents/Setter.
+    #[serde(default)]
+    pub puzzles_folder: Option<PathBuf>,
 }
 
 /// How many recent puzzles are remembered.
@@ -228,6 +227,19 @@ fn select_in_explorer(path: &Path) -> std::io::Result<std::process::Child> {
 #[cfg(not(windows))]
 fn select_in_explorer(path: &Path) -> std::io::Result<std::process::Child> {
     std::process::Command::new("explorer").arg(path).spawn()
+}
+
+/// Open a web address in the system's browser.
+pub fn open_url(url: &str) -> Result<(), String> {
+    use std::process::Command;
+    let result = if cfg!(target_os = "windows") {
+        Command::new("explorer").arg(url).spawn()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open").arg(url).spawn()
+    } else {
+        Command::new("xdg-open").arg(url).spawn()
+    };
+    result.map(|_| ()).map_err(|e| e.to_string())
 }
 
 pub fn reveal(path: &Path) -> Result<(), String> {
@@ -267,6 +279,14 @@ pub fn library_dir() -> PathBuf {
         let _ = fs::create_dir_all(&d);
         return d;
     }
+    if let Some(chosen) = load_settings().puzzles_folder.filter(|d| d.is_dir()) {
+        return chosen;
+    }
+    default_library_dir()
+}
+
+/// Documents/Setter, where puzzles go unless another folder is chosen.
+pub fn default_library_dir() -> PathBuf {
     let d = dirs::document_dir()
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(std::env::temp_dir))
         .join("Setter");
@@ -414,7 +434,10 @@ mod tests {
         add_own_word_in(&d, "zob rist").unwrap();
         add_own_word_in(&d, "zob rist").unwrap();
         let text = fs::read_to_string(d.join("words.txt")).unwrap();
-        assert_eq!(text.lines().filter(|l| *l == "zob rist").count(), 1);
+        let lines = text
+            .lines()
+            .filter(|l| l.split('\t').next() == Some("zob rist"));
+        assert_eq!(lines.count(), 1, "once, with when it was added: {text}");
         assert!(load_engine_data_from(&d).lex.contains("zobrist"));
     }
 

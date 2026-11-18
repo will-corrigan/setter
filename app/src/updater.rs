@@ -36,6 +36,11 @@ pub fn fetch() -> Option<String> {
     Some(version)
 }
 
+/// Was this copy installed by Setup.exe (so it can update)?
+pub fn installed() -> bool {
+    UpdateManager::new(GithubSource::new(REPO, None, false), None, None).is_ok()
+}
+
 /// Install the downloaded update and start the new version. Save first: this
 /// ends the process.
 pub fn restart_now() -> Result<(), String> {

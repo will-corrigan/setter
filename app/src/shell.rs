@@ -16,6 +16,7 @@ use crate::keys;
 use crate::pages::about::About;
 use crate::pages::build_grid::{self, BuildGrid};
 use crate::pages::home::Home;
+use crate::pages::settings::{Section as SettingsSection, Settings as SettingsScreen};
 use crate::pages::write_clues::WriteClues;
 use crate::palette::{self, Command, Target};
 use crate::state::{self, AppState, Mode, Shortcut};
@@ -68,9 +69,18 @@ pub fn use_startup(state: AppState) {
     use_hook(|| {
         // A newer release downloads quietly; the top bar offers it when ready.
         spawn(async move {
-            if let Ok(Some(version)) = tokio::task::spawn_blocking(updater::fetch).await {
-                let mut ready = state.update_ready;
-                ready.set(Some(version));
+            let found =
+                tokio::task::spawn_blocking(|| (updater::fetch(), updater::installed())).await;
+            match found {
+                Ok((Some(version), _)) => {
+                    let mut ready = state.update_ready;
+                    ready.set(Some(version));
+                }
+                Ok((None, true)) => {
+                    let mut current = state.up_to_date;
+                    current.set(true);
+                }
+                _ => {}
             }
         });
         spawn(async move {
@@ -215,7 +225,7 @@ pub fn save_or_keep(state: AppState) -> Result<(), String> {
 }
 
 /// Save, then install the downloaded update and start the new version.
-fn restart_to_update(mut state: AppState) {
+pub fn restart_to_update(mut state: AppState) {
     if let Err(e) = save_or_keep(state).and_then(|()| updater::restart_now()) {
         state.notice.set(Some(e));
     }
@@ -405,6 +415,14 @@ fn use_shortcuts(state: AppState) {
                     Some(Shortcut::Undo) => build_grid::undo(state),
                     Some(Shortcut::Redo) => build_grid::redo(state),
                     Some(Shortcut::Words) => build_grid::toggle_words(state),
+                    Some(Shortcut::Settings) => {
+                        if state.settings_page.peek().is_some() {
+                            let mut page = state.settings_page;
+                            page.set(None);
+                        } else {
+                            open_settings(state);
+                        }
+                    }
                     Some(Shortcut::Palette) => {
                         let mut open = state.palette_open;
                         open.toggle();
@@ -473,6 +491,8 @@ pub fn Shell() -> Element {
             }
             if (state.credits)() {
                 About {}
+            } else if let Some(section) = (state.settings_page)() {
+                SettingsScreen { section }
             } else if (state.home)() {
                 Home {}
             } else if !(state.ready)() {
@@ -586,7 +606,7 @@ const RECENT_SHOWN: usize = 5;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SettingsAction {
     Theme(Theme),
-    WordLists,
+    Settings,
     About,
 }
 
@@ -604,8 +624,10 @@ pub fn settings_menu(theme: Theme) -> Vec<(MenuItem, Option<SettingsAction>)> {
         choice("Light", Theme::Light),
         choice("Dark", Theme::Dark),
         (
-            MenuItem::new("My word lists").separated(),
-            Some(SettingsAction::WordLists),
+            MenuItem::new("Settings…")
+                .separated()
+                .keys(keys::label("Ctrl+,")),
+            Some(SettingsAction::Settings),
         ),
         (MenuItem::new("About Setter"), Some(SettingsAction::About)),
     ]
@@ -640,14 +662,19 @@ fn run_settings_action(mut state: AppState, action: SettingsAction) {
             state.settings.write().theme = theme;
             files::save_settings(&state.settings.peek());
         }
-        SettingsAction::WordLists => {
-            if let Err(e) = files::reveal(&files::config_dir()) {
-                state
-                    .notice
-                    .set(Some(format!("Couldn't show the folder: {e}")));
-            }
+        SettingsAction::Settings => open_settings(state),
+        SettingsAction::About => {
+            state.settings_page.set(None);
+            state.credits.set(true);
         }
-        SettingsAction::About => state.credits.toggle(),
+    }
+}
+
+/// Show Settings, at General (or where it was).
+pub fn open_settings(mut state: AppState) {
+    state.credits.set(false);
+    if state.settings_page.peek().is_none() {
+        state.settings_page.set(Some(SettingsSection::General));
     }
 }
 
@@ -692,6 +719,7 @@ fn run_target(mut state: AppState, target: Target) {
             Command::NextAnswer => step_answer(state, 1),
             Command::Theme(theme) => run_settings_action(state, SettingsAction::Theme(theme)),
             Command::About => run_settings_action(state, SettingsAction::About),
+            Command::Settings => open_settings(state),
         },
     }
 }
@@ -810,7 +838,8 @@ fn TopBar() -> Element {
         .as_ref()
         .map(|p| (p.title.clone(), p.author.clone()))
         .unwrap_or_default();
-    let home = (state.home)();
+    // Home, Settings and About have no puzzle on screen: a slim bar.
+    let home = (state.home)() || (state.settings_page)().is_some() || (state.credits)();
     rsx! {
         Bar {
             brand: "Setter",

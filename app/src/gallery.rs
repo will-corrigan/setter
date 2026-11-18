@@ -12,6 +12,7 @@ use crate::ds::crossword_grid::{CrosswordGrid, GridKey};
 use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
 use crate::ds::inline_edit::InlineEdit;
+use crate::ds::list_editor::{ListEditor, ListRow};
 use crate::ds::menu_button::{MenuButton, MenuItem};
 use crate::ds::mini_grid::{MiniGrid, MiniSize};
 use crate::ds::note::Note;
@@ -20,6 +21,7 @@ use crate::ds::prose::Prose;
 use crate::ds::puzzle_list::{PuzzleList, PuzzleRow, SizeChoice, SizeTiles};
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
+use crate::ds::settings::{KeyChips, SettingsGroup, SettingsNav, SettingsNavItem, SettingsRow};
 use crate::ds::side_nav::{NavItem, SideNav};
 use crate::ds::status_line::{StatusAction, StatusItem, StatusLine, StatusTone};
 use crate::ds::template_picker::{GridThumb, TemplatePicker};
@@ -474,8 +476,42 @@ fn Showcase(scope: &'static str) -> Element {
                     TemplatePicker { title: "New puzzle", grids: thumbs, on_pick: move |_| {}, on_close: move |_| {} }
                 }
             }
+            Section { title: "Settings",
+                div { class: "gallery__row",
+                    SettingsNav {
+                        back: "Back to Prize puzzle 12",
+                        items: vec![
+                            SettingsNavItem { key: "general".into(), label: "General".into(), count: None },
+                            SettingsNavItem { key: "words".into(), label: "Word lists".into(), count: Some(15) },
+                        ],
+                        current: "general",
+                        query: "",
+                        on_query: move |_| {},
+                        on_select: move |_| {},
+                        on_back: move |_| {},
+                    }
+                    SettingsGroup { title: "You",
+                        SettingsRow { label: "Setter name", detail: "On new puzzles and in exported puzzles",
+                            input { class: "settings-input", value: "Quixote" }
+                        }
+                        SettingsRow { label: "Undo", KeyChips { keys: "Ctrl+Z" } }
+                    }
+                }
+            }
+            Section { title: "List editor",
+                ListEditor {
+                    rows: vec![ListRow { text: "minute cryptic".into(), detail: "6,7".into(), when: "added today".into() }],
+                    tabs: vec![("Your words".to_string(), 1), ("Never suggest".to_string(), 0)],
+                    tab: 0,
+                    on_tab: move |_| {},
+                    placeholder: "Add a word or phrase",
+                    on_add: move |_| {},
+                    on_remove: move |_| {},
+                    on_export: move |_| {},
+                }
+            }
             Section { title: "Prose",
-                Prose { title: "Credits", text: "Open English WordNet 2025, CC BY 4.0.\nMoby Thesaurus II, public domain." }
+                Prose { text: "Open English WordNet 2025, CC BY 4.0.\n\n    WordNet Release 3.0. This software and database is being provided…" }
             }
             Section { title: "Empty state",
                 EmptyState { message: "This answer has empty squares." }
@@ -520,6 +556,10 @@ mod tests {
             "size-tiles__tile",
             "puzzle-list__row",
             "palette__item",
+            "settings-nav",
+            "settings-row",
+            "key-chips",
+            "list-editor",
         ] {
             assert!(html.contains(class), "missing {class}");
         }

@@ -28,6 +28,19 @@ pub fn label_for(keys: &str, mac: bool) -> String {
         .concat()
 }
 
+/// A shortcut's keys one by one, for drawing as chips: [Ctrl] [Shift] [S],
+/// or [⌘] [⇧] [S] on a Mac.
+pub fn parts(keys: &str) -> Vec<String> {
+    parts_for(keys, MAC)
+}
+
+pub fn parts_for(keys: &str, mac: bool) -> Vec<String> {
+    keys.split('+')
+        .filter(|k| !k.is_empty())
+        .map(|k| label_for(k, mac))
+        .collect()
+}
+
 /// A tooltip naming an action and its shortcut: "Undo (⌘Z)".
 pub fn tip(action: &str, keys: &str) -> String {
     format!("{action} ({})", label(keys))
@@ -49,5 +62,12 @@ mod tests {
         assert_eq!(label_for("Ctrl+Z", true), "⌘Z");
         assert_eq!(label_for("Alt+←", true), "⌥←");
         assert_eq!(label_for("Ctrl+Space", true), "⌘Space");
+    }
+
+    #[test]
+    fn keys_split_into_chips_per_platform() {
+        assert_eq!(parts_for("Ctrl+Shift+S", false), ["Ctrl", "Shift", "S"]);
+        assert_eq!(parts_for("Ctrl+Shift+S", true), ["⌘", "⇧", "S"]);
+        assert_eq!(parts_for("Ctrl+,", false), ["Ctrl", ","]);
     }
 }

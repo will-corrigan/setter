@@ -1,4 +1,4 @@
-//! A titled panel of long-form text (credits, licences), kept readable.
+//! Long-form text (licences), kept readable.
 
 use dioxus::prelude::*;
 
@@ -50,10 +50,9 @@ pub fn blocks(text: &str) -> Vec<Block> {
 }
 
 #[component]
-pub fn Prose(#[props(into)] title: String, #[props(into)] text: String) -> Element {
+pub fn Prose(#[props(into)] text: String) -> Element {
     rsx! {
-        article { class: "prose",
-            h1 { class: "prose__title", "{title}" }
+        div { class: "prose",
             for (i, block) in blocks(&text).into_iter().enumerate() {
                 match block {
                     Block::Heading(h) => rsx! { h2 { key: "{i}", class: "prose__heading", "{h}" } },
@@ -86,9 +85,7 @@ mod tests {
 
     #[test]
     fn renders_headings_and_preformatted_blocks() {
-        let html = render(
-            move || rsx! { Prose { title: "Credits", text: "## Data\n\n    licence text\n" } },
-        );
+        let html = render(move || rsx! { Prose { text: "## Data\n\n    licence text\n" } });
         assert!(
             html.contains("<h2")
                 && html.contains("Data")
@@ -100,10 +97,10 @@ mod tests {
     }
 
     #[test]
-    fn renders_title_and_text() {
-        let html = render(move || rsx! { Prose { title: "Credits", text: "Line one\nLine two" } });
+    fn renders_text() {
+        let html = render(move || rsx! { Prose { text: "Line one\nLine two" } });
         assert!(
-            html.contains("prose") && html.contains("Credits") && html.contains("Line two"),
+            html.contains("prose") && html.contains("Line one Line two"),
             "{html}"
         );
     }
