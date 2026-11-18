@@ -745,7 +745,7 @@ fn Clues() -> Element {
 
 /// The template picker, while it is open.
 #[component]
-fn Picker() -> Element {
+pub fn Picker() -> Element {
     let mut state = use_context::<AppState>();
     if !(state.build.picker_open)() {
         return rsx! {};
@@ -761,9 +761,11 @@ fn Picker() -> Element {
         TemplatePicker {
             title: "New puzzle",
             grids,
+            size: (state.build.picker_size)(),
             on_pick: move |i| start_on(state, i),
             on_close: move |_| {
                 state.build.picker_open.set(false);
+                state.build.picker_size.set(None);
                 focus_grid();
             },
         }

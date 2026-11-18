@@ -9,11 +9,24 @@ pub fn TopBar(
     start: Element,
     #[props(default)] middle: Option<Element>,
     end: Element,
+    /// The brand was clicked (it goes home).
+    #[props(default)]
+    on_brand: Option<EventHandler<()>>,
 ) -> Element {
     rsx! {
         header { class: "topbar",
             div { class: "topbar__start",
-                span { class: "topbar__logo", "{brand}" }
+                if let Some(go) = on_brand {
+                    button {
+                        class: "topbar__logo topbar__logo--button",
+                        r#type: "button",
+                        title: "Home",
+                        onclick: move |_| go.call(()),
+                        "{brand}"
+                    }
+                } else {
+                    span { class: "topbar__logo", "{brand}" }
+                }
                 {start}
             }
             div { class: "topbar__middle",

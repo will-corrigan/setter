@@ -48,6 +48,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .topbar__icon:hover:not(:disabled) { background: var(--canvas); }
 .topbar__icon:disabled { color: var(--faint); }
 .topbar__logo { font-family: var(--font-serif); font-weight: var(--weight-bold); font-size: var(--text-lg); }
+.topbar__logo--button { border: 0; background: none; color: var(--text); padding: var(--space-0-75) var(--space-1-5); border-radius: var(--radius-s); cursor: default; }
+.topbar__logo--button:hover { background: var(--canvas); }
 .topbar__details { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
 .topbar__details .inline-edit:first-child { font-family: var(--font-serif); font-size: var(--text-md); font-weight: var(--weight-semibold); }
 .topbar__details .inline-edit:not(:first-child) { color: var(--muted); }
@@ -384,6 +386,57 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .template-picker__mini > span { background: var(--grid-paper); }
 .template-picker__mini > .is-block { background: var(--grid-block); }
+
+/* ---------- mini grid ---------- */
+.mini-grid {
+  display: grid; grid-template-columns: repeat(var(--columns), var(--mini-cell)); grid-auto-rows: var(--mini-cell);
+  gap: var(--grid-gap); width: max-content; background: var(--grid-block); border: var(--grid-gap) solid var(--grid-block);
+}
+.mini-grid--tiny { --mini-cell: var(--mini-cell-tiny); }
+.mini-grid--small { --mini-cell: var(--mini-cell-small); }
+.mini-grid--medium { --mini-cell: var(--mini-cell-medium); }
+.mini-grid > span { background: var(--grid-paper); }
+.mini-grid > .is-block { background: var(--grid-block); }
+.mini-grid > .is-lit { background: var(--grid-answer); }
+.mini-grid > .is-current { background: var(--grid-current); }
+
+/* ---------- home: size tiles and the puzzle list ---------- */
+.home { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-6) var(--space-4); }
+.home__inner { max-width: var(--home-width); margin: 0 auto; display: grid; gap: var(--space-4); }
+.home__title { margin: 0; font-family: var(--font-serif); font-size: var(--text-xl); font-weight: var(--weight-semibold); }
+.home__list-head { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-5); }
+.home__list-head .home__title { flex: 1; }
+.home__filter {
+  width: var(--filter-width); border: var(--border) solid var(--line-strong); background: var(--surface); color: var(--text);
+  border-radius: var(--radius-m); padding: var(--space-1-5) var(--space-2-5); font: inherit;
+}
+.size-tiles { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.size-tiles__tile {
+  display: grid; justify-items: center; align-content: center; gap: var(--space-2-5); width: var(--size-tile-width); min-height: var(--size-tile-width);
+  padding: var(--space-3) var(--space-2); background: var(--surface); border: var(--border) solid var(--line); border-radius: var(--radius-l); cursor: default;
+}
+.size-tiles__tile:hover, .size-tiles__tile:focus-visible { border-color: var(--p1); }
+.size-tiles__label { color: var(--muted); font-size: var(--text-sm); }
+/* Every size pictured at the same overall size. */
+.size-tiles__tile .mini-grid { --mini-cell: calc(var(--size-tile-grid) / var(--tile-side)); }
+.puzzle-list { background: var(--surface); border: var(--border) solid var(--line); border-radius: var(--radius-l); overflow: hidden; }
+.puzzle-list__row { display: flex; align-items: center; gap: var(--space-2); padding-right: var(--space-3); border-bottom: var(--border) solid var(--line); }
+.puzzle-list__row:last-child { border-bottom: 0; }
+.puzzle-list__row:hover { background: var(--canvas); }
+.puzzle-list__open {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) var(--progress-width) var(--progress-width) var(--edited-width);
+  align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4); border: 0; background: none; color: var(--text);
+  text-align: left; cursor: default;
+}
+.puzzle-list__name { display: grid; min-width: 0; }
+.puzzle-list__name b { font-family: var(--font-serif); font-size: var(--text-md); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puzzle-list__name span { color: var(--muted); font-size: var(--text-sm); }
+.puzzle-list__progress { display: grid; gap: var(--space-1); color: var(--muted); font-size: var(--text-sm); }
+.puzzle-list__bar { display: block; height: var(--progress-height); background: var(--canvas); border-radius: var(--radius-pill); overflow: hidden; }
+.puzzle-list__bar i { display: block; height: 100%; background: var(--p1); border-radius: var(--radius-pill); }
+.puzzle-list__progress--clued .puzzle-list__bar i { background: var(--def); }
+.puzzle-list__edited { color: var(--muted); font-size: var(--text-sm); }
+.puzzle-list__more { font-size: var(--text-lg); line-height: 1; color: var(--muted); padding: 0 var(--space-1); }
 
 /* ---------- empty state ---------- */
 .empty-state { display: grid; place-items: center; min-height: var(--empty-min-height); color: var(--muted); font-size: var(--text-md); text-align: center; padding: var(--space-6); }

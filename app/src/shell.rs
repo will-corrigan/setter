@@ -14,6 +14,7 @@ use crate::files::{self, Theme};
 use crate::keys;
 use crate::pages::about::About;
 use crate::pages::build_grid::{self, BuildGrid};
+use crate::pages::home::Home;
 use crate::pages::write_clues::WriteClues;
 use crate::state::{self, AppState, Mode, Shortcut};
 use dioxus::prelude::*;
@@ -183,6 +184,27 @@ pub fn save_now(state: AppState) -> Result<(), String> {
         remember(state, &path);
     }
     Ok(())
+}
+
+/// Open a puzzle chosen on Home.
+pub fn open_path(state: AppState, path: PathBuf) {
+    spawn(async move { open_file(state, path).await });
+}
+
+/// Open… from Home.
+pub fn open_from_home(state: AppState) {
+    spawn(async move { open(state).await });
+}
+
+/// Show Home, after saving the puzzle on screen.
+pub fn go_home(mut state: AppState) {
+    if let Err(e) = save_now(state) {
+        state.notice.set(Some(e));
+        return;
+    }
+    state.build.words_open.set(false);
+    state.credits.set(false);
+    state.home.set(true);
 }
 
 /// Save as: choose a new name and place; the puzzle carries on from there.
@@ -385,6 +407,8 @@ pub fn Shell() -> Element {
             }
             if (state.credits)() {
                 About {}
+            } else if (state.home)() {
+                Home {}
             } else if !(state.ready)() {
                 EmptyState { message: "Filling a sample grid…" }
             } else if (state.mode)() == Mode::BuildGrid {
@@ -418,6 +442,7 @@ async fn new_sample(mut state: AppState) {
 /// What the File menu does.
 #[derive(Clone, PartialEq, Debug)]
 pub enum FileAction {
+    Home,
     NewPuzzle,
     NewSample,
     Open,
@@ -431,8 +456,10 @@ pub enum FileAction {
 /// to reopen; "Show in folder" needs the puzzle to have a file.
 pub fn file_menu(recent: &[PathBuf], has_file: bool, busy: bool) -> Vec<(MenuItem, FileAction)> {
     let mut out = vec![
+        (MenuItem::new("Home"), FileAction::Home),
         (
             MenuItem::new("New puzzle…")
+                .separated()
                 .keys(keys::label("Ctrl+N"))
                 .disabled(busy),
             FileAction::NewPuzzle,
@@ -520,6 +547,7 @@ pub fn settings_menu(theme: Theme) -> Vec<(MenuItem, Option<SettingsAction>)> {
 
 fn run_file_action(state: AppState, action: FileAction) {
     match action {
+        FileAction::Home => go_home(state),
         FileAction::NewPuzzle => new_puzzle(state),
         FileAction::NewSample => {
             spawn(async move { new_sample(state).await });
@@ -589,11 +617,13 @@ fn TopBar() -> Element {
         .as_ref()
         .map(|p| (p.title.clone(), p.author.clone()))
         .unwrap_or_default();
+    let home = (state.home)();
     rsx! {
         Bar {
             brand: "Setter",
+            on_brand: move |_| go_home(state),
             start: rsx! {
-                if ready {
+                if ready && !home {
                     div { class: "topbar__details",
                         InlineEdit {
                             value: title,
@@ -611,14 +641,17 @@ fn TopBar() -> Element {
                 }
             },
             middle: rsx! {
+                if !home {
                 Segmented {
                     label: "Mode",
                     options: Mode::ALL.map(|m| m.label().to_string()).to_vec(),
                     selected: (state.mode)().index(),
                     on_change: move |i| state.set_mode(Mode::from_index(i)),
                 }
+                }
             },
             end: rsx! {
+                if !home {
                 button {
                     class: "topbar__icon",
                     r#type: "button",
@@ -645,6 +678,7 @@ fn TopBar() -> Element {
                             run_file_action(state, action.clone());
                         }
                     },
+                }
                 }
                 MenuButton {
                     label: "Settings",
@@ -735,6 +769,34 @@ mod tests {
                 assert!(!bar.contains(gone), "{gone} in the bar: {bar}");
             }
         }
+    }
+
+    #[test]
+    fn home_offers_new_puzzles_and_open_with_a_slim_top_bar() {
+        let html = shell(|mut state| {
+            state.show(puzzle(), None);
+            state.home.set(true);
+        });
+        assert!(html.contains("size-tiles__tile"), "{html}");
+        assert!(html.contains(">5×5<") && html.contains(">15×15<"), "{html}");
+        assert!(html.contains(">Open…<"), "{html}");
+        let end = html.find("</header>").unwrap();
+        let bar = &html[..end];
+        assert!(bar.contains(r#"aria-label="Settings""#), "{bar}");
+        for gone in [
+            ">File<",
+            r#"aria-label="Undo""#,
+            ">Build grid<",
+            "Puzzle title",
+        ] {
+            assert!(!bar.contains(gone), "{gone}: {bar}");
+        }
+        // The logo goes home from a puzzle.
+        let page = shell(|state| state.show(puzzle(), None));
+        assert!(
+            page.contains(r#"class="topbar__logo topbar__logo--button""#),
+            "{page}"
+        );
     }
 
     #[test]
@@ -847,6 +909,7 @@ mod tests {
         assert_eq!(
             labels,
             [
+                "Home",
                 "New puzzle…",
                 "New filled sample",
                 "Open…",
@@ -860,12 +923,12 @@ mod tests {
             ]
         );
         assert_eq!(
-            menu[0].0.keys.as_deref(),
+            menu[1].0.keys.as_deref(),
             Some(keys::label("Ctrl+N").as_str())
         );
-        assert_eq!(menu[8].1, FileAction::Recent(recent[0].clone()));
+        assert_eq!(menu[9].1, FileAction::Recent(recent[0].clone()));
         assert!(
-            menu[8].0.separated,
+            menu[9].0.separated,
             "recent puzzles are a group of their own"
         );
         // No file yet: nothing to show in a folder.

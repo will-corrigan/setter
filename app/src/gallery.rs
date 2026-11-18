@@ -12,9 +12,11 @@ use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
 use crate::ds::inline_edit::InlineEdit;
 use crate::ds::menu_button::{MenuButton, MenuItem};
+use crate::ds::mini_grid::{MiniGrid, MiniSize};
 use crate::ds::note::Note;
 use crate::ds::notice::Notice;
 use crate::ds::prose::Prose;
+use crate::ds::puzzle_list::{PuzzleList, PuzzleRow, SizeChoice, SizeTiles};
 use crate::ds::reads_as::ReadsAs;
 use crate::ds::segmented::Segmented;
 use crate::ds::side_nav::{NavItem, SideNav};
@@ -56,6 +58,13 @@ fn device(kind: DeviceKind) -> &'static DeviceView {
 
 /// A small part-filled puzzle with a two-word answer, a hyphened answer and
 /// two clues, for the Build grid components.
+/// A British lattice: blocks where both row and column are odd.
+fn lattice(n: usize) -> Vec<bool> {
+    (0..n * n)
+        .map(|i| (i / n) % 2 == 1 && (i % n) % 2 == 1)
+        .collect()
+}
+
 fn sample_puzzle() -> Puzzle {
     let mut p = Puzzle::new(7, 7);
     p.grid = Grid::from_rows(&[
@@ -262,6 +271,34 @@ fn Showcase(scope: &'static str) -> Element {
                     }
                 }
             }
+            Section { title: "Mini grid",
+                div { class: "gallery__row",
+                    MiniGrid { columns: 5, blocks: lattice(5), lit: vec![0, 1, 2, 3, 4], current: Some(0), size: MiniSize::Medium }
+                    MiniGrid { columns: 5, blocks: lattice(5), size: MiniSize::Small }
+                    MiniGrid { columns: 5, blocks: lattice(5) }
+                }
+            }
+            Section { title: "Size tiles",
+                SizeTiles {
+                    sizes: vec![SizeChoice { side: 5, blocks: lattice(5) }, SizeChoice { side: 7, blocks: lattice(7) }],
+                    on_pick: move |_| {},
+                }
+            }
+            Section { title: "Puzzle list",
+                PuzzleList {
+                    rows: vec![PuzzleRow {
+                        title: "Prize puzzle 12".into(),
+                        detail: "Quixote · 5×5".into(),
+                        columns: 5,
+                        blocks: lattice(5),
+                        filled: (6, 6),
+                        clued: (4, 6),
+                        edited: "2 minutes ago".into(),
+                    }],
+                    on_open: move |_| {},
+                    on_action: move |_| {},
+                }
+            }
             Section { title: "Inline edit",
                 div { class: "gallery__row",
                     InlineEdit { value: "Prize puzzle 12", placeholder: "Untitled", label: "Puzzle title", on_change: move |_| {} }
@@ -462,6 +499,9 @@ mod tests {
             "template-picker__thumb",
             "menu-button__trigger",
             "inline-edit",
+            "mini-grid",
+            "size-tiles__tile",
+            "puzzle-list__row",
         ] {
             assert!(html.contains(class), "missing {class}");
         }

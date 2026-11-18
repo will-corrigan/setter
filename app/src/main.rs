@@ -15,6 +15,7 @@ mod grid_view;
 mod highlight;
 mod history;
 mod keys;
+mod library;
 mod pages;
 mod shell;
 mod state;

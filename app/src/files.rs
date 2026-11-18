@@ -248,6 +248,12 @@ pub fn library_dir() -> PathBuf {
     if cfg!(test) {
         return scratch_dir(&format!("library-{}", std::process::id()));
     }
+    // Dev hook, debug builds only: a scratch library for test windows.
+    if let Some(dir) = std::env::var_os("SETTER_LIBRARY_DIR").filter(|_| cfg!(debug_assertions)) {
+        let d = PathBuf::from(dir);
+        let _ = fs::create_dir_all(&d);
+        return d;
+    }
     let d = dirs::document_dir()
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(std::env::temp_dir))
         .join("Setter");

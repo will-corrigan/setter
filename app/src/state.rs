@@ -478,6 +478,8 @@ pub struct BuildState {
     pub found: Signal<Option<Found>>,
     /// The template picker is showing.
     pub picker_open: Signal<bool>,
+    /// The grid size the picker opens at, if one was chosen on Home.
+    pub picker_size: Signal<Option<usize>>,
     /// The status under the grid, once worked out.
     pub status: Signal<Option<GridStatus>>,
     /// A fill is running; the grid waits for it.
@@ -515,6 +517,8 @@ pub struct AppState {
     pub filling: Signal<bool>,
     /// The credits are showing instead of the page.
     pub credits: Signal<bool>,
+    /// Home is showing: the list of puzzles, instead of a puzzle.
+    pub home: Signal<bool>,
     /// There is a puzzle to show, and no new one on its way.
     pub ready: Memo<bool>,
     /// The answer on screen.
@@ -570,6 +574,7 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         room: use_signal(Room::default),
         found: use_signal(|| None),
         picker_open: use_signal(|| false),
+        picker_size: use_signal(|| None),
         status: use_signal(|| None),
         working: use_signal(|| false),
         stop: use_signal(|| Arc::new(std::sync::atomic::AtomicBool::new(false))),
@@ -590,6 +595,7 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         notice: use_signal(|| None),
         filling,
         credits: use_signal(|| false),
+        home: use_signal(|| false),
         ready,
         answer,
         clued,
@@ -614,6 +620,8 @@ impl AppState {
         self.history.set(History::new(grid_fill::UNDO_STEPS));
         self.build.words_open.set(false);
         self.build.picker_open.set(false);
+        self.build.picker_size.set(None);
+        self.home.set(false);
         self.build.query.set(String::new());
         self.build.found.set(None);
         self.build.status.set(None);
