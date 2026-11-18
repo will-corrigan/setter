@@ -102,8 +102,11 @@ title becomes the commit message).
 Releases are run by [release-plz](https://release-plz.dev) (`release-plz.toml`). Each push
 to main updates a Release PR with the next version, worked out from commit messages
 (`fix:` → patch, `feat:` → minor), and the changelog. Merging that PR tags `vX.Y.Z`,
-publishes the GitHub Release and builds the Windows installer (`.exe`) for it. To
-rebuild the installer for an existing release: Actions → Release → Run workflow.
+publishes the GitHub Release and attaches the Windows installer, `Setter-win-Setup.exe`,
+made by [Velopack](https://velopack.io) from the `dx build` output. Installed copies
+check GitHub when they start, download a newer release in the background, and offer
+"Restart to update" (closing Setter installs it too). Actions → Release → Run workflow
+rebuilds a release's installer (with its tag) or test-builds a branch (without one).
 
 Regenerating the word data (`scripts/build_lexicon.py`, `scripts/build_thesaurus.py`)
 needs any Python 3; they use the standard library only.
