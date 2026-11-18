@@ -130,6 +130,7 @@ pub fn menu_bar() -> Menu {
     BOUND.with(|b| b.borrow_mut().clear());
     let sep = PredefinedMenuItem::separator;
     let app = SubmenuBuilder::new()
+        .enabled(true)
         .text("Setter")
         .item(&item("About Setter", Pick::About))
         .item(&item("Check for Updates…", Pick::CheckUpdates))
@@ -146,6 +147,7 @@ pub fn menu_bar() -> Menu {
         .build()
         .expect("app menu");
     let file = SubmenuBuilder::new()
+        .enabled(true)
         .text("File")
         .item(&item("Home", Pick::Home))
         .item(&sep())
@@ -168,6 +170,7 @@ pub fn menu_bar() -> Menu {
     // The system's own: these act on whatever has the focus, so they work in
     // every text box. On the grid, the page takes ⌘Z first for its own undo.
     let edit = SubmenuBuilder::new()
+        .enabled(true)
         .text("Edit")
         .item(&PredefinedMenuItem::undo(None))
         .item(&PredefinedMenuItem::redo(None))
@@ -179,6 +182,7 @@ pub fn menu_bar() -> Menu {
         .build()
         .expect("edit menu");
     let puzzle = SubmenuBuilder::new()
+        .enabled(true)
         .text("Puzzle")
         .item(&shortcut("Search…", Shortcut::Palette))
         .item(&sep())
@@ -193,6 +197,7 @@ pub fn menu_bar() -> Menu {
         .build()
         .expect("puzzle menu");
     let window: Submenu = SubmenuBuilder::new()
+        .enabled(true)
         .text("Window")
         .item(&PredefinedMenuItem::minimize(None))
         .item(&PredefinedMenuItem::maximize(None))
@@ -244,6 +249,18 @@ mod tests {
         for s in Shortcut::ALL {
             let combo = Combo::parse(s.default_keys()).unwrap();
             assert!(accelerator(&combo).is_some(), "{s:?}");
+        }
+    }
+
+    #[test]
+    fn every_menu_is_enabled() {
+        // A submenu built without `.enabled(true)` greys out everything in it.
+        let bar = menu_bar();
+        let menus = bar.items();
+        assert_eq!(menus.len(), 5);
+        for m in menus {
+            let sub = m.as_submenu().expect("a submenu");
+            assert!(sub.is_enabled(), "{} is disabled", sub.text());
         }
     }
 

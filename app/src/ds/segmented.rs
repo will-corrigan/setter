@@ -25,6 +25,8 @@ pub fn Segmented(
             },
             "aria-label": "{label}",
             "data-variant": if pills { "pills" } else { "segmented" },
+            // Where the sliding bubble sits: one of `--count` equal slots.
+            style: "--count: {options.len()}; --at: {selected}",
             for (i, text) in options.into_iter().enumerate() {
                 ToggleItem { key: "{i}", index: i, "{text}" }
             }

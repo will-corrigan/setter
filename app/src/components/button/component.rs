@@ -5,6 +5,14 @@ use dioxus_primitives::merge_attributes;
 #[css_module("/src/components/button/style.css")]
 struct Styles;
 
+/// Add this component's stylesheet to the page. Dioxus adds a CSS module's
+/// stylesheet the first time one of its classes is used, and only once; one
+/// first used after start-up (the Mode switch, when Setter opens on Home)
+/// never arrived. So every module is added as the app starts.
+pub fn load_styles() {
+    let _ = Styles::dx_button.len();
+}
+
 #[derive(Copy, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub enum ButtonVariant {

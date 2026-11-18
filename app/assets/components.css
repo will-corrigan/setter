@@ -631,7 +631,19 @@ button, input, textarea { font: inherit; color: inherit; }
 .build-grid {
   flex: 1; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
   overflow-x: hidden; overflow-y: auto;
+  /* The squares fill the height left under the answer bar (and no more than
+     about half the width), between a floor and a cap; letters, numbers and
+     word breaks scale with them. Small grids get big squares. */
+  --grid-cell: clamp(var(--grid-cell-min),
+    min((100vh - var(--build-chrome)) / var(--rows), var(--build-grid-share) / var(--columns)),
+    var(--grid-cell-max));
+  --grid-pitch: calc(var(--grid-cell) + var(--grid-gap));
+  --grid-letter-size: calc(var(--grid-cell) * 0.5625);
+  --grid-number-size: calc(var(--grid-cell) * 0.28);
+  --grid-break-width: calc(var(--grid-cell) * 0.125);
+  --grid-hyphen-length: calc(var(--grid-cell) * 0.34);
 }
+.build-grid .xw-grid__number { top: calc(var(--grid-cell) * 0.04); left: calc(var(--grid-cell) * 0.07); }
 /* Above the clue sheet, so the words popover can lie over it. */
 .build-grid__left {
   position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3);

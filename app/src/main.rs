@@ -123,6 +123,11 @@ fn font_faces() -> &'static str {
 /// Fonts, tokens, the registry bridge, our components, then the user's theme.css.
 #[component]
 fn Styles() -> Element {
+    // The components' own stylesheets, added now rather than on first use.
+    use_hook(|| {
+        components::button::load_styles();
+        components::toggle_group::load_styles();
+    });
     rsx! {
         style { {font_faces()} }
         document::Stylesheet { href: TOKENS_CSS }

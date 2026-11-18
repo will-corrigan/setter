@@ -586,11 +586,17 @@ pub fn BuildGrid() -> Element {
     });
     use_row_in_view(light);
     let (_, answers) = (state.filled)();
+    // The grid's size, for its squares to fill the room the page has.
+    let (columns, rows) = state
+        .puzzle
+        .read()
+        .as_ref()
+        .map_or((15, 15), |p| (p.grid.width, p.grid.height));
     rsx! {
         if answers == 0 {
             EmptyState { message: "This puzzle has no answers." }
         } else {
-            div { class: "build-grid",
+            div { class: "build-grid", style: "--columns: {columns}; --rows: {rows}",
                 div { class: "build-grid__left",
                     Bar {}
                     div { class: "grid-area",
