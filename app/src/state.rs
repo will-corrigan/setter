@@ -397,7 +397,7 @@ pub fn shortcut_script() -> String {
         "{}\
          document.addEventListener('keydown', (e) => {{\
            if (window.__setterCapturing) return;\
-           const key = e.key.toLowerCase(), alt = e.altKey, ctrl = e.ctrlKey || e.metaKey, shift = e.shiftKey;\
+           const [key, alt, ctrl, shift] = {};\
            const typing = !!(e.target.closest && e.target.closest('input, textarea, [contenteditable=true]')) && !(e.target.closest && e.target.closest('.clue-field__editor'));\
            if ((window.__setterCombos || []).some(([k, a, c, s, t]) => k === key && a === alt && c === ctrl && s === shift && (t || !typing))) {{\
              e.preventDefault();\
@@ -405,7 +405,8 @@ pub fn shortcut_script() -> String {
            }}\
          }});\
          await new Promise(() => {{}});",
-        combos_script()
+        combos_script(),
+        crate::bindings::read_key_js()
     )
 }
 
@@ -1369,9 +1370,11 @@ mod tests {
         assert_eq!(shortcut("z", false, true, false), Some(Shortcut::Undo));
         // Shift makes the key a capital.
         assert_eq!(shortcut("Z", false, true, true), Some(Shortcut::Redo));
-        assert_eq!(shortcut(" ", false, true, false), Some(Shortcut::Words));
+        assert_eq!(shortcut("f", false, true, false), Some(Shortcut::Words));
+        // Not Ctrl+Space: ⌘Space is Spotlight on a Mac.
+        assert_eq!(shortcut(" ", false, true, false), None);
         assert_eq!(shortcut("z", false, false, false), None);
-        assert_eq!(shortcut(" ", false, false, false), None);
+        assert_eq!(shortcut("f", false, false, false), None);
     }
 
     #[test]

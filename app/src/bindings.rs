@@ -7,6 +7,19 @@ use crate::state::Shortcut;
 use std::collections::BTreeMap;
 use std::sync::{PoisonError, RwLock};
 
+const MAC: bool = crate::keys::MAC;
+
+/// JavaScript reading a keydown `e` as `[key, alt, ctrl, shift]`. "Ctrl" is
+/// the platform's command key: ⌘ on a Mac (where Control is left alone),
+/// Ctrl elsewhere. With Alt held, letters and digits are read from the key's
+/// position, because a Mac's ⌥K types "˚".
+pub fn read_key_js() -> String {
+    let ctrl = if MAC { "e.metaKey" } else { "e.ctrlKey" };
+    format!(
+        "[(e.altKey && /^(Key|Digit)./.test(e.code)) ? e.code.slice(-1).toLowerCase() : e.key.toLowerCase(), e.altKey, {ctrl}, e.shiftKey]"
+    )
+}
+
 /// A key with the modifiers held: what a keydown event reports.
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Combo {
@@ -88,17 +101,25 @@ impl Combo {
         parts.join("+")
     }
 
-    /// Fit to be a shortcut? It needs Ctrl or Alt, so plain typing still
-    /// types, and a real key, not a modifier alone.
+    /// Fit to be a shortcut? It needs Ctrl or Alt (⌘ or ⌥ on a Mac), so
+    /// plain typing still types, and a real key, not a modifier alone.
     pub fn usable(&self) -> Result<(), &'static str> {
         if matches!(
             self.key.as_str(),
             "control" | "alt" | "shift" | "meta" | "altgraph" | "capslock" | ""
         ) {
-            return Err("Press a key with Ctrl or Alt");
+            return Err(if MAC {
+                "Press a key with ⌘ or ⌥"
+            } else {
+                "Press a key with Ctrl or Alt"
+            });
         }
         if !self.ctrl && !self.alt {
-            return Err("Hold Ctrl or Alt with the key");
+            return Err(if MAC {
+                "Hold ⌘ or ⌥ with the key"
+            } else {
+                "Hold Ctrl or Alt with the key"
+            });
         }
         Ok(())
     }
@@ -182,7 +203,9 @@ impl Shortcut {
             Shortcut::Palette => "Ctrl+K",
             Shortcut::Settings => "Ctrl+,",
             Shortcut::NextUnclued => "Ctrl+J",
-            Shortcut::Words => "Ctrl+Space",
+            // Not Ctrl+Space: on a Mac ⌘Space is Spotlight (and ^Space
+            // switches input source).
+            Shortcut::Words => "Ctrl+F",
         }
     }
 
@@ -199,6 +222,9 @@ static CHANGES: RwLock<Changes> = RwLock::new(BTreeMap::new());
 /// Use these changes from now on (at start-up and whenever they change).
 pub fn use_changes(changes: &Changes) {
     *CHANGES.write().unwrap_or_else(PoisonError::into_inner) = changes.clone();
+    if MAC {
+        crate::mac_menu::refresh();
+    }
 }
 
 /// The keys for an action, given the setter's changes.

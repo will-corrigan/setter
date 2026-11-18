@@ -13,7 +13,7 @@ indicators are all built in.
 - **Build grid**:
   - **New puzzle** offers six standard British grids (15×15 and 13×13).
   - Click a square and type. Space switches direction; Tab moves to the next answer.
-  - Right-click or Ctrl+Space shows the words that fit, filtered by how many words
+  - Right-click or Ctrl+F (⌘F on a Mac) shows the words that fit, filtered by how many words
     the answer splits into. The wand fills just that answer; the eraser clears it.
   - Type a split such as `(4,5)` or `(3-4)` beside the answer. Bars and hyphens
     show in the grid, and fills respect them.

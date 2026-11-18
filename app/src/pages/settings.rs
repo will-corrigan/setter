@@ -545,18 +545,19 @@ fn Shortcuts() -> Element {
         outcome.set(None);
         recording.set(Some(s));
         spawn(async move {
-            let mut keys = document::eval(
+            let mut keys = document::eval(&format!(
                 "window.__setterCapturing = true;\
-                 const h = (e) => {\
+                 const h = (e) => {{\
                    if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) return;\
                    e.preventDefault(); e.stopPropagation();\
                    document.removeEventListener('keydown', h, true);\
                    window.__setterCapturing = false;\
-                   dioxus.send([e.key.toLowerCase(), e.altKey, e.ctrlKey || e.metaKey, e.shiftKey]);\
-                 };\
+                   dioxus.send({});\
+                 }};\
                  document.addEventListener('keydown', h, true);\
-                 await new Promise(() => {});",
-            );
+                 await new Promise(() => {{}});",
+                crate::bindings::read_key_js()
+            ));
             if let Ok((key, alt, ctrl, shift)) = keys.recv::<(String, bool, bool, bool)>().await {
                 recording.set(None);
                 let pressed = Combo {

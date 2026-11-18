@@ -17,6 +17,7 @@ mod highlight;
 mod history;
 mod keys;
 mod library;
+mod mac_menu;
 mod pages;
 mod palette;
 mod shell;
@@ -80,6 +81,16 @@ pub fn window_title(puzzle_title: &str, app: &str) -> String {
     }
 }
 
+/// On a Mac, the menu bar along the top of the screen; elsewhere the menus
+/// live in the window's own top bar.
+fn menu_bar() -> Option<dioxus::desktop::muda::Menu> {
+    if keys::MAC {
+        Some(mac_menu::menu_bar())
+    } else {
+        None
+    }
+}
+
 fn main() {
     // First, before anything else: Velopack's install, update and uninstall
     // steps run through here and may end the process.
@@ -87,7 +98,7 @@ fn main() {
     let (width, height) = window_size();
     let cfg = Config::new()
         .with_custom_head(files::theme_head(files::load_settings().theme))
-        .with_menu(None)
+        .with_menu(menu_bar())
         .with_window(
             WindowBuilder::new()
                 .with_title(app_name())
@@ -140,6 +151,12 @@ fn App() -> Element {
         settings
     });
     shell::use_startup(state);
+    // The Mac menu bar's items.
+    dioxus::desktop::use_muda_event_handler(move |event| {
+        if let Some(pick) = mac_menu::pick_for(event.id()) {
+            shell::run_menu_pick(state, pick);
+        }
+    });
     // The last second of work is written before the window goes.
     dioxus::desktop::use_wry_event_handler(move |event, _| {
         use dioxus::desktop::tao::event::{Event, WindowEvent};

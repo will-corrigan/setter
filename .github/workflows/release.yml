@@ -4,11 +4,11 @@
 # version, worked out from commit messages, and the changelog. Nothing is
 # built and nothing is released until that PR is merged. Merging it tags
 # vX.Y.Z and publishes the GitHub Release, and then the Windows installer
-# (.exe) is built and attached to it.
+# (.exe) and the Mac installer (.pkg, Apple Silicon) are built and attached.
 #
 # By hand (Actions → Release → Run workflow): with a tag, (re)build that
-# release's installer and attach it; without one, build the chosen branch as a
-# test and keep the installer only as a workflow artifact.
+# release's installers and attach them; without one, build the chosen branch as
+# a test and keep the installers only as workflow artifacts.
 name: Release
 
 on:
@@ -132,6 +132,69 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: setter-windows
+          path: Releases/
+      - name: Attach it to the release
+        if: env.TAG != ''
+        run: >-
+          vpk upload github --repoUrl "$REPO_URL" --token "$GH_TOKEN"
+          --tag "$TAG" --merge --publish --releaseName "Setter $VERSION"
+
+  # As for Windows. dx builds Setter.app; vpk packs it into Setter-osx-Setup.pkg,
+  # a portable .zip of the app, and the update packages (channel "osx").
+  # Unsigned for now: the first time, macOS asks to confirm opening it
+  # (System Settings → Privacy & Security → Open Anyway).
+  mac:
+    name: Mac installer
+    needs: release
+    if: >-
+      always() &&
+      ((github.event_name == 'push' && needs.release.outputs.created == 'true') ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release.outputs.tag }}
+      VPK_VERSION: "1.2.161"
+      REPO_URL: https://github.com/${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TAG || github.ref }}
+      - uses: jdx/mise-action@v4
+      - name: Build the app
+        working-directory: app
+        run: dx build --platform desktop --release
+      - name: Work out the version and the app bundle
+        run: |
+          version="${TAG#v}"
+          if [ -z "$version" ]; then
+            version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          fi
+          app=$(find target/dx -maxdepth 5 -path '*release*' -name '*.app' -type d | head -n 1)
+          [ -n "$app" ] || { echo "::error::no .app found under target/dx"; find target/dx -maxdepth 4; exit 1; }
+          main=$(ls "$app/Contents/MacOS" | head -n 1)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "APP=$app" >> "$GITHUB_ENV"
+          echo "MAIN_EXE=$main" >> "$GITHUB_ENV"
+          echo "$app"; ls -R "$app/Contents" | head -50
+      - name: Install vpk
+        run: |
+          dotnet tool install -g vpk --version "$VPK_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: Fetch the previous release, for smaller updates
+        if: env.TAG != ''
+        run: vpk download github --repoUrl "$REPO_URL" --token "$GH_TOKEN" || echo "No earlier Velopack release."
+      - name: Pack
+        run: >-
+          vpk pack --packId Setter --packVersion "$VERSION" --packDir "$APP"
+          --mainExe "$MAIN_EXE" --packTitle Setter --packAuthors "Will Corrigan"
+          --icon app/icons/icon.icns --outputDir Releases
+      - name: Keep it with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: setter-mac
           path: Releases/
       - name: Attach it to the release
         if: env.TAG != ''
