@@ -425,7 +425,7 @@ fn TopBar() -> Element {
     let (clued, total) = (state.clued)();
     let (filled, _) = (state.filled)();
     let (can_undo, can_redo) = {
-        let history = state.build.history.read();
+        let history = state.history.read();
         (history.can_undo(), history.can_redo())
     };
     let theme = state.settings.read().theme;

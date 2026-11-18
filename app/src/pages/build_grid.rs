@@ -158,9 +158,14 @@ pub fn key(state: AppState, key: GridKey) {
     }
     let c = *state.build.cursor.peek();
     let next = match key {
-        GridKey::Letter(ch) => state.edit(|p| grid_edit::type_letter(p, c, ch)),
-        GridKey::Backspace => state.edit(|p| grid_edit::backspace(p, c)),
-        GridKey::Delete => state.edit(|p| grid_edit::delete(p, c)),
+        // Letters typed into one answer undo together, as a word.
+        GridKey::Letter(ch) => state.edit_grouped(Some(&typing(state, c)), |p| {
+            grid_edit::type_letter(p, c, ch)
+        }),
+        GridKey::Backspace => {
+            state.edit_grouped(Some(&typing(state, c)), |p| grid_edit::backspace(p, c))
+        }
+        GridKey::Delete => state.edit_grouped(Some(&typing(state, c)), |p| grid_edit::delete(p, c)),
         GridKey::Move(rows, columns) => with_grid(state, |g| grid_edit::arrow(g, c, rows, columns)),
         GridKey::Turn => with_grid(state, |g| grid_edit::click(g, c, c.cell)),
         GridKey::NextAnswer => with_grid(state, |g| grid_edit::next_light(g, c, 1)),
@@ -223,6 +228,18 @@ fn move_on(state: AppState) {
     }
     close_words(state);
     focus_grid();
+}
+
+/// The undo group for typing at the cursor: the answer being typed in.
+fn typing(state: AppState, c: Cursor) -> String {
+    let light = state
+        .puzzle
+        .peek()
+        .as_ref()
+        .and_then(|p| grid_edit::current_light(&p.grid, c))
+        .map(|l| l.id)
+        .unwrap_or_default();
+    format!("grid:{light}")
 }
 
 /// A word was picked in the popover.
