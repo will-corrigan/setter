@@ -231,6 +231,8 @@ jobs:
         run: |
           mkdir -p dmg
           ditto -x -k Releases/Setter-osx-Portable.zip dmg
+          # What people get must pass macOS's signature check, or it's "damaged".
+          codesign --verify --deep --strict --verbose=2 dmg/Setter.app
           pipx run --spec dmgbuild==2.0.0 dmgbuild -s scripts/dmg-settings.py -D app=dmg/Setter.app Setter Releases/Setter.dmg
       - name: Keep it with the run
         uses: actions/upload-artifact@v4
