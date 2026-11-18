@@ -298,20 +298,6 @@ pub fn marks(
 
 // ---------- the answer as text and tiles ----------
 
-/// The answer in capitals for the navigator, blanks as a middle dot.
-pub fn answer_letters(pattern: &str) -> String {
-    pattern
-        .chars()
-        .map(|c| {
-            if c == '?' {
-                '·'
-            } else {
-                c.to_ascii_uppercase()
-            }
-        })
-        .collect()
-}
-
 /// The answer as uncoloured tiles (blank squares stay blank).
 pub fn plain_tiles(pattern: &str) -> Vec<Tile> {
     vec![Tile {
@@ -535,6 +521,29 @@ pub struct AppState {
     /// (answers with every square filled, all answers)
     pub filled: Memo<(usize, usize)>,
     pub build: BuildState,
+}
+
+/// The answer through `cell`: the one going the way `current` goes if two
+/// cross there; the other if `current` is already that one.
+pub fn light_through(
+    lights: &[xw_engine::grid::Light],
+    cell: usize,
+    current: &str,
+) -> Option<String> {
+    let through: Vec<&xw_engine::grid::Light> =
+        lights.iter().filter(|l| l.cells.contains(&cell)).collect();
+    let same_way = current.ends_with(",a");
+    let here = through.iter().find(|l| l.id == current);
+    let pick = match here {
+        // Clicking inside the answer on screen: keep it.
+        Some(l) => Some(*l),
+        None => through
+            .iter()
+            .find(|l| (l.dir == xw_engine::grid::Dir::Across) == same_way)
+            .or(through.first())
+            .copied(),
+    };
+    pick.map(|l| l.id.clone())
 }
 
 /// Create the app state and share it with every component below.
@@ -830,6 +839,18 @@ impl AppState {
             device,
             option,
         })
+    }
+
+    /// Go to the answer through a square of the grid: the one running the
+    /// same way as the answer on screen if there is one, else the other.
+    pub fn select_cell(self, cell: usize) {
+        let light = self.puzzle.peek().as_ref().and_then(|p| {
+            let current = self.selection.peek().light.clone();
+            light_through(&p.grid.lights(), cell, &current)
+        });
+        if let Some(l) = light {
+            self.go_to(&l);
+        }
     }
 
     pub fn select_device(mut self, device: DeviceKind) {
@@ -1262,8 +1283,7 @@ mod tests {
     }
 
     #[test]
-    fn answers_show_blanks_as_dots_and_plain_tiles() {
-        assert_eq!(answer_letters("or?hes?ra"), "OR·HES·RA");
+    fn plain_tiles_keep_blanks() {
         assert_eq!(
             plain_tiles("c?t"),
             vec![Tile {
@@ -1851,5 +1871,17 @@ mod tests {
             },
         );
         assert_eq!(recovered, "Write true");
+    }
+
+    #[test]
+    fn a_square_of_the_mini_grid_goes_to_the_answer_running_the_same_way() {
+        let grid = xw_engine::grid::Grid::from_rows(&["cat", "a#o", "bye"]);
+        let lights = grid.lights();
+        // Square 2 (top right) is in 1 across and 2 down.
+        assert_eq!(light_through(&lights, 2, "2,0,a").as_deref(), Some("0,0,a"));
+        assert_eq!(light_through(&lights, 2, "0,0,d").as_deref(), Some("0,2,d"));
+        // Inside the answer on screen: stays.
+        assert_eq!(light_through(&lights, 2, "0,2,d").as_deref(), Some("0,2,d"));
+        assert_eq!(light_through(&lights, 4, "0,0,a"), None, "a block");
     }
 }

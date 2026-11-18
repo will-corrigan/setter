@@ -165,6 +165,9 @@
 
   /* ---------- layout ---------- */
   --sidebar-width: 178px;
+  --rail-width: 220px;
+  --rail-grid: 182px;
+  --bank-filter-width: 260px;
   --column-min: 180px;
   --column-max-height: 430px;
   --tile-size: 28px;

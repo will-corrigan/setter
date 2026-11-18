@@ -5,8 +5,8 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn AnswerNav(
-    /// The answer in capitals, e.g. "ORCHESTRA".
-    #[props(into)]
+    /// The answer in capitals, e.g. "ORCHESTRA"; left out if empty.
+    #[props(into, default)]
     word: String,
     /// Its clue number and enumeration, e.g. "10a · 9".
     #[props(into)]
@@ -25,7 +25,9 @@ pub fn AnswerNav(
                 "‹"
             }
             span { class: "answer-nav__text",
-                span { class: "answer-nav__word", "{word}" }
+                if !word.is_empty() {
+                    span { class: "answer-nav__word", "{word}" }
+                }
                 span { class: "answer-nav__label", "{label}" }
             }
             Button {
