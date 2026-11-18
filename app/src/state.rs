@@ -89,7 +89,7 @@ pub fn reload_engine() {
 pub fn build_bank(pattern: &str) -> Vec<DeviceView> {
     let data = engine();
     bank::build(
-        xw_engine::Ctx::new(&data.lex, &data.abbr),
+        xw_engine::Ctx::new(&data.lex, &data.abbr).with_quality(&data.quality),
         &data.ind,
         &data.th,
         pattern,
@@ -206,6 +206,27 @@ pub type Picks = HashMap<PickKey, String>;
 
 pub fn pick_key(light: &str, device: DeviceKind, option: usize, column: usize) -> PickKey {
     (light.to_string(), device, option, column)
+}
+
+/// How an option reads with the setter's picks in it. The engine writes it
+/// with each column's first word ("letters of “in beg”, mixed"); a column's
+/// pick takes that word's place ("letters of “be gin”, mixed").
+pub fn reads_as_picked(
+    reads_as: &str,
+    columns: &[Column],
+    picks: &Picks,
+    key: impl Fn(usize) -> PickKey,
+) -> String {
+    let mut out = reads_as.to_string();
+    for (i, column) in columns.iter().enumerate() {
+        let first = column.groups.iter().flat_map(|(_, items)| items).next();
+        if let (Some(first), Some(pick)) = (first, picks.get(&key(i))) {
+            if first != pick {
+                out = out.replacen(first.as_str(), pick, 1);
+            }
+        }
+    }
+    out
 }
 
 /// Pick `item` in a column; picking the same item again un-picks it.
@@ -530,27 +551,15 @@ pub struct AppState {
     pub build: BuildState,
 }
 
-/// The answer through `cell`: the one going the way `current` goes if two
-/// cross there; the other if `current` is already that one.
-pub fn light_through(
-    lights: &[xw_engine::grid::Light],
-    cell: usize,
-    current: &str,
-) -> Option<String> {
-    let through: Vec<&xw_engine::grid::Light> =
-        lights.iter().filter(|l| l.cells.contains(&cell)).collect();
-    let same_way = current.ends_with(",a");
-    let here = through.iter().find(|l| l.id == current);
-    let pick = match here {
-        // Clicking inside the answer on screen: keep it.
-        Some(l) => Some(*l),
-        None => through
-            .iter()
-            .find(|l| (l.dir == xw_engine::grid::Dir::Across) == same_way)
-            .or(through.first())
-            .copied(),
-    };
-    pick.map(|l| l.id.clone())
+/// Where the cursor is on Write clues: Build grid's cursor if it is on the
+/// answer on screen, else the start of that answer.
+pub fn clue_cursor(grid: &xw_engine::grid::Grid, cursor: Cursor, light: &str) -> Cursor {
+    let on_it = grid_edit::current_light(grid, cursor).is_some_and(|l| l.id == light);
+    if on_it {
+        cursor
+    } else {
+        grid_fill::cursor_on(grid, light).unwrap_or(cursor)
+    }
 }
 
 /// Create the app state and share it with every component below.
@@ -868,15 +877,22 @@ impl AppState {
         })
     }
 
-    /// Go to the answer through a square of the grid: the one running the
-    /// same way as the answer on screen if there is one, else the other.
-    pub fn select_cell(self, cell: usize) {
-        let light = self.puzzle.peek().as_ref().and_then(|p| {
-            let current = self.selection.peek().light.clone();
-            light_through(&p.grid.lights(), cell, &current)
+    /// A square of Write clues' grid was clicked: as on Build grid, a new
+    /// square keeps the direction if it can, and the same square again
+    /// switches between across and down.
+    pub fn select_cell(mut self, cell: usize) {
+        let next = self.puzzle.peek().as_ref().and_then(|p| {
+            let light = self.selection.peek().light.clone();
+            let from = clue_cursor(&p.grid, *self.build.cursor.peek(), &light);
+            let to = grid_edit::click(&p.grid, from, cell);
+            grid_edit::current_light(&p.grid, to).map(|l| (to, l.id))
         });
-        if let Some(l) = light {
-            self.go_to(&l);
+        let Some((cursor, light)) = next else {
+            return;
+        };
+        self.build.cursor.set(cursor);
+        if self.selection.peek().light != light {
+            self.selection.set(Selection::at(light));
         }
     }
 
@@ -1958,14 +1974,42 @@ mod tests {
     }
 
     #[test]
-    fn a_square_of_the_mini_grid_goes_to_the_answer_running_the_same_way() {
-        let grid = xw_engine::grid::Grid::from_rows(&["cat", "a#o", "bye"]);
-        let lights = grid.lights();
-        // Square 2 (top right) is in 1 across and 2 down.
-        assert_eq!(light_through(&lights, 2, "2,0,a").as_deref(), Some("0,0,a"));
-        assert_eq!(light_through(&lights, 2, "0,0,d").as_deref(), Some("0,2,d"));
-        // Inside the answer on screen: stays.
-        assert_eq!(light_through(&lights, 2, "0,2,d").as_deref(), Some("0,2,d"));
-        assert_eq!(light_through(&lights, 4, "0,0,a"), None, "a block");
+    fn write_clues_grid_clicks_work_like_build_grid() {
+        let said = after(
+            |state| {
+                state.set_mode(Mode::WriteClues);
+                // Square 2 (top right) is in 1 across and 2 down.
+                state.select_cell(2);
+                let first = state.selection.peek().light.clone();
+                state.select_cell(2);
+                let second = state.selection.peek().light.clone();
+                state.select_cell(2);
+                let third = state.selection.peek().light.clone();
+                let mut s = state.selection;
+                s.set(Selection::at(format!("{first}|{second}|{third}")));
+            },
+            |state| state.selection.read().light.clone(),
+        );
+        assert_eq!(said, "0,0,a|0,2,d|0,0,a");
+    }
+
+    #[test]
+    fn how_it_reads_follows_the_picks() {
+        let columns = vec![Column {
+            title: "Letters to mix".into(),
+            tone: Tone::P1,
+            wide: true,
+            groups: vec![("Two words".into(), vec!["in beg".into(), "be gin".into()])],
+            marks: vec![],
+        }];
+        let key = |i| pick_key("0,0,a", DeviceKind::Anagram, 0, i);
+        let mut picks = Picks::new();
+        let base = "letters of “in beg”, mixed";
+        assert_eq!(reads_as_picked(base, &columns, &picks, key), base);
+        picks.insert(key(0), "be gin".into());
+        assert_eq!(
+            reads_as_picked(base, &columns, &picks, key),
+            "letters of “be gin”, mixed"
+        );
     }
 }

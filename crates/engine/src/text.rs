@@ -133,6 +133,9 @@ mod tests {
         assert!(!is_offensive("vocal chink"));
         assert!(!is_offensive("spick and span"));
         assert!(!is_offensive("niggard"));
+        // Anagram finders split words into made-up phrases: no slur may appear.
+        assert!(is_offensive("be nig"));
+        assert!(is_offensive("nig nog"));
     }
 
     #[test]
