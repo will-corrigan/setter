@@ -13,14 +13,25 @@ pub fn AnswerNav(
     label: String,
     /// -1 for the previous answer, 1 for the next.
     on_step: EventHandler<i32>,
+    /// The keys for each, shown in their tooltips ("Alt+←").
+    #[props(into, default)]
+    previous_keys: String,
+    #[props(into, default)] next_keys: String,
 ) -> Element {
+    let tip = |action: &str, keys: &str| {
+        if keys.is_empty() {
+            action.to_string()
+        } else {
+            format!("{action} ({keys})")
+        }
+    };
     rsx! {
         div { class: "answer-nav", role: "group", aria_label: "Answer",
             Button {
                 variant: ButtonVariant::Outline,
                 size: ButtonSize::IconXs,
                 aria_label: "Previous answer",
-                title: crate::keys::tip("Previous answer", "Alt+←"),
+                title: tip("Previous answer", &previous_keys),
                 onclick: move |_| on_step.call(-1),
                 "‹"
             }
@@ -34,7 +45,7 @@ pub fn AnswerNav(
                 variant: ButtonVariant::Outline,
                 size: ButtonSize::IconXs,
                 aria_label: "Next answer",
-                title: crate::keys::tip("Next answer", "Alt+→"),
+                title: tip("Next answer", &next_keys),
                 onclick: move |_| on_step.call(1),
                 "›"
             }
