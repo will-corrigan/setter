@@ -181,26 +181,26 @@ svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-widt
 </div>
 
 <!-- ======================= 2. TOP BAR + MENUS ======================= -->
-<div class="frame-label">2 · The same top bar on both pages: logo · title and setter (click to edit; dot = unsaved) · page switch · Search · File · Settings. Page actions move into the page.</div>
+<div class="frame-label">2 · The same top bar on both pages: logo · title and setter (click to edit; saved automatically) · page switch · Search · File (shown open) · Settings. Page actions move into the page.</div>
 <div class="app">
   <div class="top">
-    <div class="left"><span class="logo">Setter</span><span class="title"><b>Prize puzzle 12</b><span>Quixote</span><i class="dot" title="Unsaved changes"></i></span></div>
+    <div class="left"><span class="logo">Setter</span><span class="title"><b>Prize puzzle 12</b><span>Quixote</span></span></div>
     <div><span class="seg"><button class="on">Build grid</button><button>Write clues</button></span></div>
     <div class="right">
       <span class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search<span class="kbd">Ctrl K</span></span>
       <button class="btn" style="border-color: var(--text)">File ▾</button>
-      <button class="icon-btn" style="background: var(--canvas)"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+      <button class="icon-btn"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
     </div>
   </div>
-  <div class="menu" style="right: 250px; top: 50px;">
+  <div class="menu" style="right: 66px; top: 50px;">
     <div class="item">Home<span class="sc">Ctrl H</span></div>
     <div class="sep"></div>
     <div class="item">New puzzle…<span class="sc">Ctrl N</span></div>
     <div class="item">Open…<span class="sc">Ctrl O</span></div>
-    <div class="item hl">Open recent<span class="sc">▸</span></div>
+    <div class="item hl"><span class="sc" style="margin:0 4px 0 0">◂</span>Open recent</div>
     <div class="sep"></div>
-    <div class="item">Save<span class="sc">Ctrl S</span></div>
     <div class="item">Save as…<span class="sc">Ctrl Shift S</span></div>
+    <div class="item">Rename…</div>
     <div class="item">Duplicate</div>
     <div class="item">Show in folder</div>
     <div class="sep"></div>
@@ -209,18 +209,10 @@ svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-widt
     <div class="item">Export ipuz…</div>
     <div class="item">Print…<span class="sc">Ctrl P</span></div>
   </div>
-  <div class="menu" style="right: 500px; top: 160px; min-width: 220px;">
+  <div class="menu" style="right: 316px; top: 160px; min-width: 220px;">
     <div class="item">Prize puzzle 12<span class="sc">2 min ago</span></div>
     <div class="item">Sunday special<span class="sc">yesterday</span></div>
     <div class="item">Mini 7<span class="sc">3 days ago</span></div>
-  </div>
-  <div class="menu" style="right: 12px; top: 50px; min-width: 210px;">
-    <div class="item"><span class="check"></span>Theme: System</div>
-    <div class="item"><span class="check">✓</span>Light</div>
-    <div class="item"><span class="check"></span>Dark</div>
-    <div class="sep"></div>
-    <div class="item">My word lists</div>
-    <div class="item">About Setter</div>
   </div>
   <div class="page">
     <div>
