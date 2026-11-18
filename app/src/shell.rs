@@ -394,48 +394,92 @@ fn step_answer(state: AppState, delta: i32) {
 
 /// Alt+← / Alt+→ step through the answers and Ctrl+S saves, wherever the
 /// focus is. On Build grid, Ctrl+Z and Ctrl+Shift+Z undo and redo, and
-/// Ctrl+Space shows the words for the selected answer.
+/// the Words shortcut (Ctrl+F) shows the words for the selected answer.
 fn use_shortcuts(state: AppState) {
     use_effect(move || {
         spawn(async move {
             let mut keys = document::eval(&state::shortcut_script());
             while let Ok((key, alt, ctrl, shift)) = keys.recv::<(String, bool, bool, bool)>().await
             {
-                match state::shortcut(&key, alt, ctrl, shift) {
-                    Some(Shortcut::PreviousAnswer) => step_answer(state, -1),
-                    Some(Shortcut::NextAnswer) => step_answer(state, 1),
-                    Some(Shortcut::Save) => {
-                        if let Err(e) = save_or_keep(state) {
-                            let mut notice = state.notice;
-                            notice.set(Some(e));
-                        }
-                    }
-                    Some(Shortcut::SaveAs) => save_as(state).await,
-                    Some(Shortcut::New) => new_puzzle(state),
-                    Some(Shortcut::Open) => open(state).await,
-                    Some(Shortcut::Export) => export(state, ExportFormat::WebPage).await,
-                    Some(Shortcut::Undo) => build_grid::undo(state),
-                    Some(Shortcut::Redo) => build_grid::redo(state),
-                    Some(Shortcut::Words) => build_grid::toggle_words(state),
-                    Some(Shortcut::Settings) => {
-                        if state.settings_page.peek().is_some() {
-                            let mut page = state.settings_page;
-                            page.set(None);
-                        } else {
-                            open_settings(state);
-                        }
-                    }
-                    Some(Shortcut::Palette) => {
-                        let mut open = state.palette_open;
-                        open.toggle();
-                    }
-                    Some(Shortcut::NextUnclued) if !*state.home.peek() => state.next_unclued(),
-                    Some(Shortcut::NextUnclued) => {}
-                    None => {}
+                if let Some(s) = state::shortcut(&key, alt, ctrl, shift) {
+                    note_key_ran(s);
+                    run_shortcut(state, s).await;
                 }
             }
         });
     });
+}
+
+/// Run what a shortcut's keys (or its Mac menu item) ask for.
+async fn run_shortcut(state: AppState, s: Shortcut) {
+    match s {
+        Shortcut::PreviousAnswer => step_answer(state, -1),
+        Shortcut::NextAnswer => step_answer(state, 1),
+        Shortcut::Save => {
+            if let Err(e) = save_or_keep(state) {
+                let mut notice = state.notice;
+                notice.set(Some(e));
+            }
+        }
+        Shortcut::SaveAs => save_as(state).await,
+        Shortcut::New => new_puzzle(state),
+        Shortcut::Open => open(state).await,
+        Shortcut::Export => export(state, ExportFormat::WebPage).await,
+        Shortcut::Undo => build_grid::undo(state),
+        Shortcut::Redo => build_grid::redo(state),
+        Shortcut::Words => build_grid::toggle_words(state),
+        Shortcut::Settings => {
+            if state.settings_page.peek().is_some() {
+                let mut page = state.settings_page;
+                page.set(None);
+            } else {
+                open_settings(state);
+            }
+        }
+        Shortcut::Palette => {
+            let mut open = state.palette_open;
+            open.toggle();
+        }
+        Shortcut::NextUnclued if !*state.home.peek() => state.next_unclued(),
+        Shortcut::NextUnclued => {}
+    }
+}
+
+/// The last shortcut its keys ran, and when: on a Mac the page sees the keys
+/// before the menu bar does, and the menu item mustn't run it a second time.
+static KEY_RAN: std::sync::Mutex<Option<(Shortcut, std::time::Instant)>> =
+    std::sync::Mutex::new(None);
+
+fn note_key_ran(s: Shortcut) {
+    if let Ok(mut last) = KEY_RAN.lock() {
+        *last = Some((s, std::time::Instant::now()));
+    }
+}
+
+fn key_just_ran(s: Shortcut) -> bool {
+    KEY_RAN
+        .lock()
+        .ok()
+        .and_then(|l| *l)
+        .is_some_and(|(last, at)| last == s && at.elapsed() < Duration::from_millis(500))
+}
+
+/// Run a Mac menu bar item.
+pub fn run_menu_pick(mut state: AppState, pick: crate::mac_menu::Pick) {
+    use crate::mac_menu::Pick;
+    match pick {
+        Pick::Shortcut(s) if key_just_ran(s) => {}
+        Pick::Shortcut(s) => {
+            spawn(async move { run_shortcut(state, s).await });
+        }
+        Pick::Export(format) => run_file_action(state, FileAction::Export(format)),
+        Pick::NewSample => run_file_action(state, FileAction::NewSample),
+        Pick::Home => run_file_action(state, FileAction::Home),
+        Pick::About => {
+            state.settings_page.set(None);
+            state.credits.set(true);
+        }
+    }
 }
 
 /// Save the puzzle to its own file a second after it last changed. (The old

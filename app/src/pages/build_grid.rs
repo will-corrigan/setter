@@ -126,7 +126,7 @@ fn open_words(mut state: AppState) {
     });
 }
 
-/// Ctrl+Space: open the words for the selected answer, or close them.
+/// Words that fit (Ctrl+F): open the words for the selected answer, or close them.
 pub fn toggle_words(state: AppState) {
     if !free(state) {
         return;
