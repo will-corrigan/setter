@@ -154,7 +154,8 @@ jobs:
           --tag "$TAG" --merge --publish --releaseName "Setter $VERSION"
 
   # As for Windows. dx builds Setter.app; vpk packs it into Setter-osx-Setup.pkg,
-  # a portable .zip of the app, and the update packages (channel "osx").
+  # a portable .zip of the app, and the update packages (channel "osx"); the
+  # zip's app also goes into Setter.dmg.
   # Unsigned for now: the first time, macOS asks to confirm opening it
   # (System Settings → Privacy & Security → Open Anyway).
   mac:
@@ -214,6 +215,16 @@ jobs:
           vpk pack --packId Setter --packVersion "$VERSION" --packDir "$APP"
           --mainExe "$MAIN_EXE" --packTitle Setter --packAuthors "Will Corrigan"
           --icon app/icons/icon.icns --outputDir Releases
+      # The usual Mac way in: a disk image with Setter beside a shortcut to
+      # Applications, to drag across. Made from vpk's portable app, so it
+      # updates itself like the .pkg's.
+      - name: Make the disk image
+        run: |
+          mkdir -p dmg
+          ditto -x -k Releases/Setter-osx-Portable.zip dmg
+          ls dmg
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Setter -srcfolder dmg -ov -format UDZO Releases/Setter.dmg
       - name: Keep it with the run
         uses: actions/upload-artifact@v4
         with:
@@ -224,3 +235,6 @@ jobs:
         run: >-
           vpk upload github --repoUrl "$REPO_URL" --token "$GH_TOKEN"
           --tag "$TAG" --merge --publish --releaseName "Setter $VERSION"
+      - name: Attach the disk image
+        if: env.TAG != ''
+        run: gh release upload "$TAG" Releases/Setter.dmg --clobber --repo "${{ github.repository }}"
