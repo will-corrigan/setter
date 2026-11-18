@@ -1,6 +1,7 @@
 //! The app shell: startup, the top bar, and whichever page the mode shows.
 
 use crate::autosave;
+use crate::ds::command_palette::{CommandPalette, PaletteGroup, PaletteItem};
 use crate::ds::crossword_grid::GridKey;
 use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
@@ -16,6 +17,7 @@ use crate::pages::about::About;
 use crate::pages::build_grid::{self, BuildGrid};
 use crate::pages::home::Home;
 use crate::pages::write_clues::WriteClues;
+use crate::palette::{self, Command, Target};
 use crate::state::{self, AppState, Mode, Shortcut};
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
@@ -348,6 +350,12 @@ fn use_shortcuts(state: AppState) {
                     Some(Shortcut::Undo) => build_grid::undo(state),
                     Some(Shortcut::Redo) => build_grid::redo(state),
                     Some(Shortcut::Words) => build_grid::toggle_words(state),
+                    Some(Shortcut::Palette) => {
+                        let mut open = state.palette_open;
+                        open.toggle();
+                    }
+                    Some(Shortcut::NextUnclued) if !*state.home.peek() => state.next_unclued(),
+                    Some(Shortcut::NextUnclued) => {}
                     None => {}
                 }
             }
@@ -402,6 +410,9 @@ pub fn Shell() -> Element {
         // A click anywhere but in the words popover closes it.
         div { class: "shell", onclick: move |_| build_grid::close_words(state),
             TopBar {}
+            if (state.palette_open)() {
+                Palette {}
+            }
             if let Some(message) = (state.notice)() {
                 Notice { message, on_dismiss: move |_| state.notice.set(None) }
             }
@@ -585,6 +596,133 @@ fn run_settings_action(mut state: AppState, action: SettingsAction) {
     }
 }
 
+/// Run what was chosen in the palette.
+fn run_target(mut state: AppState, target: Target) {
+    match target {
+        Target::Answer(light) => {
+            state.home.set(false);
+            state.credits.set(false);
+            state.go_to(&light);
+        }
+        Target::Puzzle(path) => open_path(state, path),
+        Target::Command(c) => match c {
+            Command::Home => go_home(state),
+            Command::NewPuzzle => new_puzzle(state),
+            Command::NewSample => run_file_action(state, FileAction::NewSample),
+            Command::Open => run_file_action(state, FileAction::Open),
+            Command::SaveAs => run_file_action(state, FileAction::SaveAs),
+            Command::ShowInFolder => show_in_folder(state),
+            Command::Export(format) => run_file_action(state, FileAction::Export(format)),
+            Command::BuildGrid | Command::WriteClues => {
+                state.home.set(false);
+                state.credits.set(false);
+                state.set_mode(if c == Command::BuildGrid {
+                    Mode::BuildGrid
+                } else {
+                    Mode::WriteClues
+                });
+            }
+            Command::Undo => build_grid::undo(state),
+            Command::Redo => build_grid::redo(state),
+            Command::FillRest => {
+                state.home.set(false);
+                state.set_mode(Mode::BuildGrid);
+                dioxus::core::spawn_forever(build_grid::fill_rest(state));
+            }
+            Command::NextUnclued => {
+                state.home.set(false);
+                state.next_unclued();
+            }
+            Command::PreviousAnswer => step_answer(state, -1),
+            Command::NextAnswer => step_answer(state, 1),
+            Command::Theme(theme) => run_settings_action(state, SettingsAction::Theme(theme)),
+            Command::About => run_settings_action(state, SettingsAction::About),
+        },
+    }
+}
+
+/// How many matches each palette group shows.
+const PALETTE_GROUP: usize = 6;
+
+#[component]
+fn Palette() -> Element {
+    let mut state = use_context::<AppState>();
+    let mut query = use_signal(String::new);
+    let mut active = use_signal(|| 0usize);
+    let entries = {
+        let puzzle = state.puzzle.read();
+        let history = state.history.read();
+        let path = state.path.read().clone();
+        let mut all = palette::commands(
+            puzzle.is_some(),
+            path.is_some(),
+            history.can_undo(),
+            history.can_redo(),
+        );
+        if let Some(p) = puzzle.as_ref() {
+            all.extend(palette::answer_entries(&crate::answers::answers(p), p));
+        }
+        let recent: Vec<PathBuf> = state
+            .settings
+            .read()
+            .recent
+            .iter()
+            .filter(|r| Some(*r) != path.as_ref())
+            .cloned()
+            .collect();
+        all.extend(palette::puzzle_entries(&recent));
+        all
+    };
+    let found = palette::search(&entries, &query(), PALETTE_GROUP);
+    let targets: Vec<Target> = found
+        .iter()
+        .flat_map(|(_, hits)| hits.iter().map(|h| h.entry.target.clone()))
+        .collect();
+    let total = targets.len();
+    let groups: Vec<PaletteGroup> = found
+        .into_iter()
+        .map(|(g, hits)| PaletteGroup {
+            title: g.title().to_string(),
+            items: hits
+                .into_iter()
+                .map(|h| PaletteItem {
+                    label: h.entry.label,
+                    marks: h.marks,
+                    detail: h.entry.detail,
+                    keys: h.entry.keys,
+                })
+                .collect(),
+        })
+        .collect();
+    let mut close = move || {
+        state.palette_open.set(false);
+    };
+    rsx! {
+        CommandPalette {
+            query: query(),
+            groups,
+            active: active().min(total.saturating_sub(1)),
+            on_query: move |q: String| {
+                query.set(q);
+                active.set(0);
+            },
+            on_move: move |d: i32| {
+                if total > 0 {
+                    let next = (active() as i64 + d as i64).rem_euclid(total as i64) as usize;
+                    active.set(next);
+                }
+            },
+            on_run: move |i: usize| {
+                close();
+                if let Some(t) = targets.get(i) {
+                    run_target(state, t.clone());
+                }
+            },
+            on_close: move |_| close(),
+        }
+    }
+}
+
 #[component]
 fn TopBar() -> Element {
     let state = use_context::<AppState>();
@@ -679,6 +817,18 @@ fn TopBar() -> Element {
                         }
                     },
                 }
+                }
+                button {
+                    class: "topbar__search",
+                    r#type: "button",
+                    title: keys::tip("Search", "Ctrl+K"),
+                    onclick: move |_| {
+                        let mut open = state.palette_open;
+                        open.set(true);
+                    },
+                    Icon { name: IconName::Search }
+                    "Search"
+                    kbd { "{keys::label(\"Ctrl+K\")}" }
                 }
                 MenuButton {
                     label: "Settings",

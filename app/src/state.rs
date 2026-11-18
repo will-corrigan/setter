@@ -345,6 +345,9 @@ pub enum Shortcut {
     Export,
     Undo,
     Redo,
+    /// Open or close the command palette.
+    Palette,
+    NextUnclued,
     /// Open or close the words popover.
     Words,
 }
@@ -359,7 +362,7 @@ impl Shortcut {
 
 /// (key, Alt held, Ctrl held, Shift held, action). The page's key listener
 /// and `shortcut` both read this table.
-pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 10] = [
+pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 12] = [
     ("arrowleft", true, false, false, Shortcut::PreviousAnswer),
     ("arrowright", true, false, false, Shortcut::NextAnswer),
     ("s", false, true, false, Shortcut::Save),
@@ -367,6 +370,8 @@ pub const SHORTCUTS: [(&str, bool, bool, bool, Shortcut); 10] = [
     ("n", false, true, false, Shortcut::New),
     ("o", false, true, false, Shortcut::Open),
     ("e", false, true, false, Shortcut::Export),
+    ("k", false, true, false, Shortcut::Palette),
+    ("j", false, true, false, Shortcut::NextUnclued),
     ("z", false, true, false, Shortcut::Undo),
     ("z", false, true, true, Shortcut::Redo),
     (" ", false, true, false, Shortcut::Words),
@@ -519,6 +524,8 @@ pub struct AppState {
     pub credits: Signal<bool>,
     /// Home is showing: the list of puzzles, instead of a puzzle.
     pub home: Signal<bool>,
+    /// The command palette is open.
+    pub palette_open: Signal<bool>,
     /// There is a puzzle to show, and no new one on its way.
     pub ready: Memo<bool>,
     /// The answer on screen.
@@ -596,6 +603,7 @@ pub fn use_app_state(settings: impl FnOnce() -> Settings) -> AppState {
         filling,
         credits: use_signal(|| false),
         home: use_signal(|| false),
+        palette_open: use_signal(|| false),
         ready,
         answer,
         clued,
@@ -775,6 +783,29 @@ impl AppState {
             self.mode.set(snap.mode);
         }
         self.puzzle.set(Some(snap.puzzle));
+    }
+
+    /// Go to an answer, on whichever page is showing.
+    pub fn go_to(mut self, light: &str) {
+        let cursor = self
+            .puzzle
+            .peek()
+            .as_ref()
+            .and_then(|p| grid_fill::cursor_on(&p.grid, light));
+        if let Some(c) = cursor {
+            self.build.cursor.set(c);
+        }
+        self.selection.set(Selection::at(light));
+    }
+
+    /// Go to the next answer with no clue yet (stays put if all have one).
+    pub fn next_unclued(self) {
+        let next = self.puzzle.peek().as_ref().and_then(|p| {
+            answers::next_unclued(&answers::answers(p), p, &self.selection.peek().light)
+        });
+        if let Some(light) = next {
+            self.go_to(&light);
+        }
     }
 
     pub fn step(mut self, delta: i32) {

@@ -7,6 +7,7 @@ pub mod answer_nav;
 pub mod chip;
 pub mod clue_field;
 pub mod clue_sheet;
+pub mod command_palette;
 pub mod crossword_grid;
 mod discipline;
 pub mod empty_state;

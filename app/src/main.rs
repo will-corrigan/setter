@@ -17,6 +17,7 @@ mod history;
 mod keys;
 mod library;
 mod pages;
+mod palette;
 mod shell;
 mod state;
 

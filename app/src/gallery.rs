@@ -7,6 +7,7 @@ use crate::ds::answer_nav::AnswerNav;
 use crate::ds::chip::Chip;
 use crate::ds::clue_field::ClueField;
 use crate::ds::clue_sheet::ClueSheet;
+use crate::ds::command_palette::{CommandPalette, PaletteGroup, PaletteItem};
 use crate::ds::crossword_grid::{CrosswordGrid, GridKey};
 use crate::ds::empty_state::EmptyState;
 use crate::ds::icon::{Icon, IconName};
@@ -271,6 +272,22 @@ fn Showcase(scope: &'static str) -> Element {
                     }
                 }
             }
+            Section { title: "Command palette",
+                div { class: "gallery__palette",
+                    CommandPalette {
+                        query: "ex",
+                        groups: vec![PaletteGroup {
+                            title: "Commands".into(),
+                            items: vec![PaletteItem { label: "Export web page…".into(), marks: vec![(0, 2)], detail: String::new(), keys: Some("Ctrl+E".into()) }],
+                        }],
+                        active: 0,
+                        on_query: move |_| {},
+                        on_move: move |_| {},
+                        on_run: move |_| {},
+                        on_close: move |_| {},
+                    }
+                }
+            }
             Section { title: "Mini grid",
                 div { class: "gallery__row",
                     MiniGrid { columns: 5, blocks: lattice(5), lit: vec![0, 1, 2, 3, 4], current: Some(0), size: MiniSize::Medium }
@@ -502,6 +519,7 @@ mod tests {
             "mini-grid",
             "size-tiles__tile",
             "puzzle-list__row",
+            "palette__item",
         ] {
             assert!(html.contains(class), "missing {class}");
         }

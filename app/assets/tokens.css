@@ -180,6 +180,10 @@
   --edited-width: 110px;
   --home-width: 920px;
   --filter-width: 220px;
+  --palette-width: 600px;
+  --palette-top: 96px;
+  --search-width: 180px;
+  --gallery-palette-height: 220px;
   --menu-min-width: 180px;
   --answer-nav-width: 220px; /* room for a 15-letter answer and its label */
   --icon-size: 16px;
