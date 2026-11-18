@@ -469,6 +469,7 @@ fn Showcase(scope: &'static str) -> Element {
                             cursor.set(next);
                         }
                     },
+                    on_write: |_| {},
                 }
             }
             Section { title: "Template picker",

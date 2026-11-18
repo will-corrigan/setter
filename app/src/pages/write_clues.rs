@@ -18,7 +18,7 @@ use crate::grid_view;
 use crate::highlight;
 use crate::state::{self, AppState, Shortcut};
 use dioxus::prelude::*;
-use xw_engine::bank::DeviceKind;
+use xw_engine::bank::{DeviceKind, Tone};
 
 #[component]
 pub fn WriteClues() -> Element {
@@ -268,6 +268,20 @@ fn Clue() -> Element {
     }
 }
 
+/// Keep a definition of the setter's own for this answer (Settings →
+/// Definitions lists them), and pick it.
+fn add_own_definition(mut state: AppState, answer: &str, text: &str, key: state::PickKey) {
+    match crate::user_lists::add_definition(&crate::files::config_dir(), answer, text) {
+        Ok(()) => {
+            crate::pages::settings::lists_changed(state);
+            if state.picks.peek().get(&key).map(String::as_str) != Some(text) {
+                state.toggle_pick(key, text);
+            }
+        }
+        Err(e) => state.notice.set(Some(e)),
+    }
+}
+
 /// One column of words per part of the chosen option, under one filter.
 #[component]
 fn Bank() -> Element {
@@ -314,6 +328,10 @@ fn Bank() -> Element {
                 WordColumn {
                     // A new device or option starts each column afresh.
                     key: "{shown.device:?}/{shown.option}/{i}",
+                    on_add: (column.tone == Tone::Definition).then(|| {
+                        let (key, words) = (key.clone(), answer.words());
+                        EventHandler::new(move |text: String| add_own_definition(state, &words, &text, key.clone()))
+                    }),
                     column,
                     selected,
                     filter: typed.clone(),

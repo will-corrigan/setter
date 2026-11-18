@@ -169,8 +169,11 @@ pub fn required_parts(kind: DeviceKind, option: &DeviceOption) -> usize {
 pub const MAX_OPTIONS: usize = 12;
 
 /// Every device's material for `answer` (a grid pattern; '?' marks a blank).
+/// A phrase is best given as words ("way in"): its meanings are looked up as
+/// a phrase; the wordplay uses its letters.
 pub fn build(ctx: Ctx, ind: &Indicators, th: &Thesaurus, answer: &str) -> Vec<DeviceView> {
     let key = text::key(answer);
+    let phrase = answer.trim().to_lowercase();
     if answer.contains('?') || key.len() < 2 {
         return DeviceKind::ALL
             .iter()
@@ -183,7 +186,7 @@ pub fn build(ctx: Ctx, ind: &Indicators, th: &Thesaurus, answer: &str) -> Vec<De
     }
     DeviceKind::ALL
         .iter()
-        .map(|&kind| devices::build_one(ctx, ind, th, kind, &key))
+        .map(|&kind| devices::build_one(ctx, ind, th, kind, &key, &phrase))
         .collect()
 }
 
