@@ -345,15 +345,31 @@ fn General() -> Element {
                 }
             }
             SettingsGroup { title: "Updates",
-                SettingsRow { label: "New versions",
+                SettingsRow { label: "Setter {env!(\"CARGO_PKG_VERSION\")}",
+                    crate::pages::about::UpdateStatus {}
+                }
+                SettingsRow { label: "Check for updates",
                     Segmented {
-                        label: "New versions",
-                        options: vec!["Ask first".to_string(), "Install automatically".to_string()],
-                        selected: usize::from(s.auto_update),
+                        label: "Check for updates",
+                        options: vec!["Automatically".to_string(), "Only when I ask".to_string()],
+                        selected: usize::from(s.manual_update_checks),
                         on_change: move |i: usize| {
-                            state.settings.write().auto_update = i == 1;
+                            state.settings.write().manual_update_checks = i == 1;
                             save();
                         },
+                    }
+                }
+                if !s.manual_update_checks {
+                    SettingsRow { label: "New versions",
+                        Segmented {
+                            label: "New versions",
+                            options: vec!["Ask first".to_string(), "Install automatically".to_string()],
+                            selected: usize::from(s.auto_update),
+                            on_change: move |i: usize| {
+                                state.settings.write().auto_update = i == 1;
+                                save();
+                            },
+                        }
                     }
                 }
             }

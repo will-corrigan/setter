@@ -75,6 +75,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .notice--update { justify-content: flex-start; background: var(--p1-bg); }
 .notice--update > .notice__text { margin-right: auto; }
 
+/* ---------- update status (About, Settings) ---------- */
+.update-status { display: inline-flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.update-status__line { color: var(--muted); font-size: var(--text-sm); }
+
 /* ---------- side navigation (device list) ---------- */
 .side-nav { background: var(--surface); border-right: var(--border) solid var(--line); padding: var(--space-3) var(--space-2); overflow-x: hidden; overflow-y: auto; }
 .side-nav__group { margin: var(--space-1) var(--space-2) var(--space-1); font-size: var(--text-xs); font-weight: var(--weight-semibold); color: var(--muted); }
