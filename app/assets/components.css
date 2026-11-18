@@ -136,7 +136,7 @@ button, input, textarea { font: inherit; color: inherit; }
   color: var(--tone, var(--muted)); border-bottom: var(--border) solid var(--line);
   box-shadow: inset 0 var(--accent-bar) 0 var(--tone, var(--line-strong)); border-radius: var(--radius-m) var(--radius-m) 0 0;
 }
-.word-column__filter {
+.word-column__filter, .word-column__own {
   margin: var(--space-1-5) var(--space-2) var(--space-half); padding: var(--space-0-75) var(--space-1-75);
   border: var(--border) solid var(--line); border-radius: var(--radius-s);
   background: var(--canvas); font-size: var(--text-sm);
@@ -153,6 +153,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .word-column__item[aria-selected="true"] { background: var(--tone); color: var(--surface); }
 .word-column__item mark { background: var(--tone-bg); color: var(--tone); font-weight: var(--weight-bold); border-radius: var(--radius-2xs); }
 .word-column__item[aria-selected="true"] mark { background: transparent; color: inherit; }
+.word-column__add { display: grid; }
 .word-column__empty { padding: var(--space-2) var(--space-3); color: var(--muted); font-size: var(--text-sm); }
 
 /* ---------- clue field: free text with draggable coloured pieces ---------- */
@@ -311,10 +312,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .clue-sheet__row[aria-current="true"] > .clue-sheet__number { color: var(--p1); }
 .clue-sheet__enum { font-family: var(--font-sans); font-size: var(--text-xs); color: var(--muted); white-space: nowrap; }
 .clue-sheet__missing {
-  justify-self: start; padding: var(--border) var(--space-2); border-radius: var(--radius-pill);
-  background: var(--p3-bg); color: var(--p3);
+  justify-self: start; padding: var(--border) var(--space-2); border: 0; border-radius: var(--radius-pill);
+  background: var(--p3-bg); color: var(--p3); cursor: pointer;
   font-family: var(--font-sans); font-size: var(--text-xs); font-weight: var(--weight-semibold);
+  transition: box-shadow var(--dur-fast) var(--ease);
 }
+.clue-sheet__missing:hover { box-shadow: inset 0 0 0 var(--border) var(--p3); }
+.clue-sheet__missing:hover::after { content: " →"; }
 
 /* ---------- words popover ---------- */
 /* The anchor places it in grid squares from the grid's corner: --at-column

@@ -758,6 +758,10 @@ fn Clues() -> Element {
             down,
             current,
             on_select: move |light: String| select_answer(state, &light),
+            on_write: move |light: String| {
+                state.go_to(&light);
+                state.set_mode(Mode::WriteClues);
+            },
         }
     }
 }

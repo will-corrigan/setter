@@ -870,8 +870,8 @@ impl AppState {
 
     /// The word bank for the answer on screen, once it has been built.
     pub fn shown(self) -> Option<Shown> {
-        let pattern = (self.answer)()?.pattern;
-        let devices = self.banks.read().get(&pattern).cloned()?;
+        let words = (self.answer)()?.words();
+        let devices = self.banks.read().get(&words).cloned()?;
         let (device, option) = resolve(&devices, &self.selection.read());
         Some(Shown {
             devices,

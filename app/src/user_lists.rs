@@ -197,6 +197,86 @@ pub fn set_abbreviation(dir: &Path, letters: &str, meanings: &str) -> Result<(),
     write_abbreviations(dir, all)
 }
 
+// ---------- definitions ----------
+
+#[derive(Serialize, Deserialize, Default)]
+struct DefinitionFile {
+    #[serde(default)]
+    definitions: BTreeMap<String, Vec<String>>,
+}
+
+const DEFINITION_HEADER: &str = "# Your definitions: an answer, and words that can define it in a clue (each\n# also works the other way round), as Settings keeps them.\n";
+
+/// The setter's definitions: an answer ("way in") and what defines it.
+pub fn definitions(dir: &Path) -> Vec<(String, Vec<String>)> {
+    let src = fs::read_to_string(dir.join("definitions.toml")).unwrap_or_default();
+    toml::from_str::<DefinitionFile>(&src)
+        .map(|f| f.definitions.into_iter().collect())
+        .unwrap_or_default()
+}
+
+/// Every (answer, definition) pair, for the engine.
+pub fn definition_pairs(dir: &Path) -> Vec<(String, String)> {
+    definitions(dir)
+        .into_iter()
+        .flat_map(|(answer, defs)| defs.into_iter().map(move |d| (answer.clone(), d)))
+        .collect()
+}
+
+fn write_definitions(dir: &Path, all: BTreeMap<String, Vec<String>>) -> Result<(), String> {
+    let body = toml::to_string(&DefinitionFile { definitions: all }).map_err(|e| e.to_string())?;
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    crate::files::write_whole(
+        &dir.join("definitions.toml"),
+        format!("{DEFINITION_HEADER}{body}").as_bytes(),
+    )
+    .map_err(|e| format!("Couldn't save the definitions: {e}"))
+}
+
+/// An answer as it's kept: lower case, single spaces ("Way  In" → "way in").
+fn answer_key(answer: &str) -> String {
+    answer
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// Set an answer's definitions ("way in" → "entrance, access"), split at
+/// commas; none removes the answer.
+pub fn set_definitions(dir: &Path, answer: &str, defs: &str) -> Result<(), String> {
+    let key = answer_key(answer);
+    if key.is_empty() {
+        return Err("Type the answer first.".into());
+    }
+    let list: Vec<String> = defs
+        .split(',')
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty())
+        .collect();
+    let mut all: BTreeMap<String, Vec<String>> = definitions(dir).into_iter().collect();
+    if list.is_empty() {
+        all.remove(&key);
+    } else {
+        all.insert(key, list);
+    }
+    write_definitions(dir, all)
+}
+
+/// Add one definition to an answer's (from the word bank).
+pub fn add_definition(dir: &Path, answer: &str, definition: &str) -> Result<(), String> {
+    let (key, def) = (answer_key(answer), definition.trim().to_string());
+    if key.is_empty() || def.is_empty() {
+        return Err("Type a definition first.".into());
+    }
+    let mut all: BTreeMap<String, Vec<String>> = definitions(dir).into_iter().collect();
+    let list = all.entry(key).or_default();
+    if !list.iter().any(|d| d.eq_ignore_ascii_case(&def)) {
+        list.push(def);
+    }
+    write_definitions(dir, all)
+}
+
 // ---------- indicators ----------
 
 #[derive(Serialize, Deserialize, Default)]
@@ -354,5 +434,25 @@ mod tests {
             .ind
             .get("anagram")
             .contains(&"discombobulated".to_string()));
+    }
+
+    #[test]
+    fn definitions_are_added_set_and_read_by_the_engine() {
+        let d = dir("defs");
+        add_definition(&d, "Way  In", "Entrance").unwrap();
+        add_definition(&d, "way in", "entrance").unwrap();
+        add_definition(&d, "way in", "access").unwrap();
+        assert_eq!(
+            definitions(&d),
+            [(
+                "way in".to_string(),
+                vec!["Entrance".to_string(), "access".to_string()]
+            )]
+        );
+        let data = crate::files::load_engine_data_from(&d);
+        assert_eq!(data.th.own("wayin"), ["Entrance", "access"]);
+        assert!(data.warnings.is_empty());
+        set_definitions(&d, "way in", "").unwrap();
+        assert!(definitions(&d).is_empty());
     }
 }

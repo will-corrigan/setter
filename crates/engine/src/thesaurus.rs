@@ -40,6 +40,9 @@ pub struct Thesaurus {
     senses: HashMap<String, Vec<u32>>,
     /// headword -> the rest of its Moby line (split on demand; keeps memory down)
     moby: HashMap<String, String>,
+    /// The setter's own definitions, both ways round, keyed by letters only
+    /// ("wayin" → ["entrance"], "entrance" → ["way in"]).
+    own: HashMap<String, Vec<String>>,
 }
 
 fn gunzip(bytes: &[u8]) -> String {
@@ -151,7 +154,45 @@ impl Thesaurus {
             synsets,
             senses,
             moby,
+            own: HashMap::new(),
         }
+    }
+
+    /// Add the setter's own definitions: (answer, definition) pairs, e.g.
+    /// ("way in", "entrance"). Each also counts the other way round.
+    pub fn add_own(&mut self, pairs: &[(String, String)]) {
+        let mut put = |from: &str, to: &str| {
+            let list = self.own.entry(crate::text::key(from)).or_default();
+            let to = to.trim().to_string();
+            if !to.is_empty() && !list.iter().any(|w| w.eq_ignore_ascii_case(&to)) {
+                list.push(to);
+            }
+        };
+        for (answer, definition) in pairs {
+            put(answer, definition);
+            put(definition, answer);
+        }
+    }
+
+    /// The setter's own definitions of `word`.
+    pub fn own(&self, word: &str) -> &[String] {
+        self.own
+            .get(&crate::text::key(word))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// Moby headwords whose lists include `phrase`: for a phrase with no
+    /// entry of its own, the words it can stand for ("way in" → "entrance").
+    fn moby_listing(&self, phrase: &str) -> Vec<&str> {
+        let mut out: Vec<&str> = self
+            .moby
+            .iter()
+            .filter(|(_, list)| list.split(',').any(|w| w.eq_ignore_ascii_case(phrase)))
+            .map(|(head, _)| head.as_str())
+            .collect();
+        out.sort_unstable();
+        out
     }
 
     /// Has the thesaurus anything to offer for this exact word: another word
@@ -229,6 +270,7 @@ impl Thesaurus {
         let (key, base) = self.lookup(word);
         let ids = self.sense_ids(&key);
         let mut g = Groups::for_base(&word.trim().to_lowercase(), base.as_deref(), limit);
+        g.add("Yours", self.own(word).iter().map(String::as_str), limit);
         g.add("Synonyms", self.members_of(ids), limit);
         let hypers: Vec<u32> = ids
             .iter()
@@ -236,6 +278,11 @@ impl Thesaurus {
             .collect();
         g.add("Broader", self.members_of(&hypers), (limit / 4).max(4));
         g.add("Related", self.moby_words(&key), limit);
+        // A phrase with no entry of its own may still be listed under words
+        // it means.
+        if key.contains(' ') && ids.is_empty() && !self.moby.contains_key(&key) {
+            g.add("Listed under", self.moby_listing(&key), limit);
+        }
         g.out
     }
 
@@ -507,5 +554,26 @@ mod tests {
         assert!(th().meanings("zzqxv", 10).is_empty());
         assert!(th().senses("zzqxv", 5).is_empty());
         assert!(th().linked("", 5).is_empty());
+    }
+
+    #[test]
+    fn a_phrase_with_no_entry_is_found_where_it_is_listed() {
+        let g = th().meanings("way in", 80);
+        let listed = g
+            .iter()
+            .find(|(t, _)| t == "Listed under")
+            .map(|(_, w)| w.clone());
+        let listed = listed.expect("way in is listed under some words");
+        assert!(listed.iter().any(|w| w == "entrance"), "{listed:?}");
+    }
+
+    #[test]
+    fn the_setter_s_own_definitions_come_first_both_ways_round() {
+        let mut t = Thesaurus::bundled();
+        t.add_own(&[("way in".into(), "Entrance".into())]);
+        let g = t.meanings("way in", 80);
+        assert_eq!(g[0], ("Yours".to_string(), vec!["Entrance".to_string()]));
+        assert_eq!(t.own("wayin"), ["Entrance"]);
+        assert_eq!(t.meanings("entrance", 80)[0].1[0], "way in");
     }
 }

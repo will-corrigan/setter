@@ -20,28 +20,53 @@ fn Column(
     rows: Vec<ClueRow>,
     current: Option<String>,
     on_select: EventHandler<String>,
+    on_write: EventHandler<String>,
 ) -> Element {
     rsx! {
         section { class: "clue-sheet__column", "aria-label": title,
             h3 { class: "clue-sheet__title", "{title}" }
             for row in rows {
-                button {
-                    key: "{row.key}",
-                    class: "clue-sheet__row",
-                    r#type: "button",
-                    "aria-current": (current.as_deref() == Some(row.key.as_str())).then_some("true"),
-                    onclick: {
-                        let key = row.key.clone();
-                        move |_| on_select.call(key.clone())
-                    },
-                    b { class: "clue-sheet__number", "{row.number}" }
-                    if let Some(clue) = row.clue {
+                if let Some(clue) = row.clue {
+                    button {
+                        key: "{row.key}",
+                        class: "clue-sheet__row",
+                        r#type: "button",
+                        "aria-current": (current.as_deref() == Some(row.key.as_str())).then_some("true"),
+                        onclick: {
+                            let key = row.key.clone();
+                            move |_| on_select.call(key.clone())
+                        },
+                        b { class: "clue-sheet__number", "{row.number}" }
                         span { class: "clue-sheet__clue",
                             "{clue} "
                             span { class: "clue-sheet__enum", "({row.enumeration})" }
                         }
-                    } else {
-                        span { class: "clue-sheet__missing", "no clue" }
+                    }
+                } else {
+                    // No clue yet: the row picks the answer on the grid, as
+                    // the others do; its "no clue" goes to write one.
+                    div {
+                        key: "{row.key}",
+                        class: "clue-sheet__row",
+                        "aria-current": (current.as_deref() == Some(row.key.as_str())).then_some("true"),
+                        onclick: {
+                            let key = row.key.clone();
+                            move |_| on_select.call(key.clone())
+                        },
+                        b { class: "clue-sheet__number", "{row.number}" }
+                        button {
+                            class: "clue-sheet__missing",
+                            r#type: "button",
+                            title: "Write a clue for {row.number} {title.to_lowercase()}",
+                            onclick: {
+                                let key = row.key.clone();
+                                move |e: MouseEvent| {
+                                    e.stop_propagation();
+                                    on_write.call(key.clone());
+                                }
+                            },
+                            "no clue"
+                        }
                     }
                 }
             }
@@ -56,11 +81,13 @@ pub fn ClueSheet(
     /// The key of the selected answer's row.
     current: Option<String>,
     on_select: EventHandler<String>,
+    /// "no clue" was clicked: write that answer's clue.
+    on_write: EventHandler<String>,
 ) -> Element {
     rsx! {
         div { class: "clue-sheet",
-            Column { title: "Across", rows: across, current: current.clone(), on_select }
-            Column { title: "Down", rows: down, current, on_select }
+            Column { title: "Across", rows: across, current: current.clone(), on_select, on_write }
+            Column { title: "Down", rows: down, current, on_select, on_write }
         }
     }
 }
@@ -90,6 +117,7 @@ mod tests {
                     down: vec![row("0,0,d", 1, Some("Bill with the French put forward"), "2,3")],
                     current: Some("0,0,d".to_string()),
                     on_select: |_| {},
+                    on_write: |_| {},
                 }
             }
         })

@@ -108,6 +108,13 @@ pub fn use_startup(state: AppState) {
                     None => fill_sample(state).await,
                 }
             }
+            // Setter opens on Home; the last puzzle is loaded behind it, to
+            // carry on with. (Dev scripts drive the puzzle pages, so they
+            // start there.)
+            if !dev_script_set() {
+                let mut home = state.home;
+                home.set(true);
+            }
             // Have the grid index ready before Build grid first asks for it.
             tokio::task::spawn_blocking(|| {
                 state::engine().fill();
@@ -122,6 +129,10 @@ pub fn use_startup(state: AppState) {
 /// `dev script finished` to stderr when it returns. Synthetic input can't be
 /// sent to WSLg windows, so screenshots of a worked clue are driven this way
 /// (clicks and typing as DOM events). See `scripts/dev/`.
+fn dev_script_set() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("SETTER_DEV_SCRIPT").is_some()
+}
+
 fn run_dev_script() {
     #[cfg(debug_assertions)]
     if let Some(js) =
@@ -355,9 +366,14 @@ fn file_name(path: &Path) -> String {
 /// Build the word bank for the answer on screen, off the UI thread. Each
 /// pattern is built once and kept.
 fn use_bank_loader(state: AppState) {
-    let pattern = use_memo(move || (state.answer)().map(|a| a.pattern));
+    // Keyed by the answer as words ("way in"), so phrases are looked up as
+    // phrases, not as their run-together letters.
+    let pattern = use_memo(move || (state.answer)().map(|a| a.words()));
     let _bank = use_resource(move || {
         let pattern = pattern();
+        // When the word lists change the banks are cleared and this counter
+        // moves on; the answer on screen is built again.
+        let _ = (state.build.reloads)();
         async move {
             let Some(pattern) = pattern else {
                 return;

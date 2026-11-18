@@ -15,6 +15,48 @@ pub struct Answer {
     pub enumeration: String,
 }
 
+impl Answer {
+    /// The answer as words, split by its enumeration: "way in" for WAYIN
+    /// (3,2), "well-to-do" for 4-2-2. The letters as they are if the
+    /// enumeration doesn't fit them, or a square is empty.
+    pub fn words(&self) -> String {
+        words(&self.pattern, &self.enumeration)
+    }
+}
+
+pub fn words(pattern: &str, enumeration: &str) -> String {
+    let letters: Vec<char> = pattern.chars().collect();
+    let mut out = String::new();
+    let mut at = 0;
+    let mut rest = enumeration.trim();
+    while !rest.is_empty() {
+        let digits = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        let Ok(n) = rest[..digits].parse::<usize>() else {
+            return pattern.to_string();
+        };
+        if at + n > letters.len() {
+            return pattern.to_string();
+        }
+        out.extend(&letters[at..at + n]);
+        at += n;
+        rest = &rest[digits..];
+        match rest.chars().next() {
+            Some(',') | Some(' ') => out.push(' '),
+            Some('-') => out.push('-'),
+            Some(_) => return pattern.to_string(),
+            None => {}
+        }
+        rest = rest.get(1..).unwrap_or("").trim_start();
+    }
+    if at == letters.len() {
+        out
+    } else {
+        pattern.to_string()
+    }
+}
+
 /// All answers: acrosses then downs, each in number order.
 pub fn answers(p: &Puzzle) -> Vec<Answer> {
     let lights = p.grid.lights();
@@ -171,5 +213,15 @@ mod tests {
             p.clues.entry((*id).into()).or_default().text = "x".into();
         }
         assert_eq!(next_unclued(&list, &p, ids[0]), None);
+    }
+
+    #[test]
+    fn answers_split_into_their_words() {
+        assert_eq!(words("wayin", "3,2"), "way in");
+        assert_eq!(words("welltodo", "4-2-2"), "well-to-do");
+        assert_eq!(words("tree", "4"), "tree");
+        assert_eq!(words("tree", "3"), "tree");
+        assert_eq!(words("wayin", "3,3"), "wayin");
+        assert_eq!(words("w?yin", "3,2"), "w?y in");
     }
 }
